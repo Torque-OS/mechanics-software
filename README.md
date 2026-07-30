@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" alt="Torque-OS" width="220"/>
+</p>
+
 # Mechanics Software
 
 Backend system for a mechanic shop — built as the Tech Challenge for FIAP POS Tech (15SOAT), covering Phase 1 and Phase 2.
