@@ -44,8 +44,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:sha-${{ steps.sha.outputs.short }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/mechanics-software:sha-${{ steps.sha.outputs.short }}
+            ghcr.io/mechanics-software:latest
 
   migrate:
     name: Apply EF Core migrations (Init Container)
@@ -72,7 +72,7 @@ jobs:
       - name: Patch API deployment image
         run: |
           kubectl set image deployment/mechanics-software-api \
-            api=ghcr.io/${{ github.repository }}:sha-${{ needs.build-and-push.outputs.sha_tag }} \
+            api=ghcr.io/mechanics-software:sha-${{ needs.build-and-push.outputs.sha_tag }} \
             --namespace mechanics-software
 
       - name: Wait for migration initContainer to complete
@@ -117,7 +117,7 @@ jobs:
 
       - name: Pin image tag in deployment manifest
         run: |
-          sed -i "s|ghcr.io/${{ github.repository }}:latest|ghcr.io/${{ github.repository }}:sha-${{ needs.build-and-push.outputs.sha_tag }}|g" \
+          sed -i "s|ghcr.io/${{ github.repository }}:latest|ghcr.io/mechanics-software:sha-${{ needs.build-and-push.outputs.sha_tag }}|g" \
             k8s/deployment-api.yaml
 
       - name: Apply all K8s manifests
@@ -127,4 +127,4 @@ jobs:
         run: |
           kubectl rollout status deployment/mechanics-software-api \
             --namespace mechanics-software \
-            --timeout=120s
+            --timeout=120
