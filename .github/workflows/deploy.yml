@@ -22,6 +22,7 @@ jobs:
       packages: write
     outputs:
       sha_tag: ${{ steps.sha.outputs.short }}
+      image_name: ${{ steps.image.outputs.name }}
 
     steps:
       - name: Checkout source
@@ -30,6 +31,11 @@ jobs:
       - name: Compute short SHA
         id: sha
         run: echo "short=$(echo '${{ github.event.workflow_run.head_sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Compute lowercase image name
+        id: image
+        run: |
+          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -44,8 +50,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:sha-${{ steps.sha.outputs.short }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.image.outputs.name }}:sha-${{ steps.sha.outputs.short }}
+            ${{ steps.image.outputs.name }}:latest
 
   migrate:
     name: Apply EF Core migrations (Init Container)
@@ -72,7 +78,7 @@ jobs:
       - name: Patch API deployment image
         run: |
           kubectl set image deployment/mechanics-software-api \
-            api=ghcr.io/${{ github.repository }}:sha-${{ needs.build-and-push.outputs.sha_tag }} \
+            api=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${{ needs.build-and-push.outputs.sha_tag }} \
             --namespace mechanics-software
 
       - name: Wait for migration initContainer to complete
@@ -117,7 +123,7 @@ jobs:
 
       - name: Pin image tag in deployment manifest
         run: |
-          sed -i "s|ghcr.io/${{ github.repository }}:latest|ghcr.io/${{ github.repository }}:sha-${{ needs.build-and-push.outputs.sha_tag }}|g" \
+          sed -i "s|ghcr.io/${GITHUB_REPOSITORY,,}:latest|ghcr.io/${GITHUB_REPOSITORY,,}:sha-${{ needs.build-and-push.outputs.sha_tag }}|g" \
             k8s/deployment-api.yaml
 
       - name: Apply all K8s manifests
