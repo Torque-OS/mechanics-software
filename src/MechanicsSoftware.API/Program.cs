@@ -31,6 +31,8 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+app.UseMiddleware<GatewayKeyMiddleware>();
+
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {

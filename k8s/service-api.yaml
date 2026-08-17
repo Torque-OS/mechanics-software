@@ -5,6 +5,12 @@ metadata:
   namespace: mechanics-software
   labels:
     app: mechanics-software-api
+  annotations:
+    # An NLB, because API Gateway private integrations cannot target the
+    # Classic Load Balancer that EKS would otherwise create.
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # No public address at all: the only way in is the API Gateway VPC Link.
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
 spec:
   type: LoadBalancer
   selector:
