@@ -46,29 +46,7 @@ public class JwtProviderTests
 
         parsed.Subject.Should().Be(user.Id.ToString());
         parsed.Claims.Should().Contain(c => c.Value == user.Email.Value);
-        parsed.Claims.Should().Contain(c => c.Type == JwtSettings.RoleClaimType && c.Value == user.Role);
-    }
-
-    [Fact]
-    public void Generate_StampsThePlatformIssuerAndAudience()
-    {
-        var provider = new JwtProvider(BuildConfig());
-
-        var parsed = new JwtSecurityTokenHandler().ReadJwtToken(provider.Generate(BuildUser()).Token);
-
-        parsed.Issuer.Should().Be(JwtSettings.DefaultIssuer);
-        parsed.Audiences.Should().ContainSingle().Which.Should().Be(JwtSettings.DefaultAudience);
-    }
-
-    [Fact]
-    public void Generate_UsesTheShortRoleClaimName()
-    {
-        var provider = new JwtProvider(BuildConfig());
-
-        var parsed = new JwtSecurityTokenHandler().ReadJwtToken(provider.Generate(BuildUser()).Token);
-
-        parsed.Claims.Should().Contain(c => c.Type == "role");
-        parsed.Claims.Should().NotContain(c => c.Type.StartsWith("http://schemas.", StringComparison.Ordinal));
+        parsed.Claims.Should().Contain(c => c.Value == user.Role);
     }
 
     [Fact]

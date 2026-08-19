@@ -2,7 +2,6 @@ using MechanicsSoftware.API.Transport.Vehicles;
 using MechanicsSoftware.Application.UseCases.Vehicles.Commands;
 using MechanicsSoftware.Application.UseCases.Vehicles.Handlers;
 using MechanicsSoftware.Application.UseCases.Vehicles.Queries;
-using MechanicsSoftware.Domain.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +9,7 @@ namespace MechanicsSoftware.API.Controllers;
 
 [ApiController]
 [Route("api/vehicles")]
-[Authorize(Policy = Policies.Staff)]
+[Authorize]
 public class VehiclesController(CreateVehicleHandler createVehicle, // NOSONAR S6960: Clean Architecture — each action delegates to a dedicated handler
     DeleteVehicleHandler deleteVehicle,
     GetVehicleHandler getVehicle,

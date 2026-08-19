@@ -8,5 +8,3 @@ metadata:
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:8080" # nosonar — TLS terminated at ingress; plain HTTP is correct for intra-cluster traffic
-  JWT_ISSUER: "torque-os"
-  JWT_AUDIENCE: "mechanics-software-api"

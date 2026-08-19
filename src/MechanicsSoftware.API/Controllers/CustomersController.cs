@@ -2,7 +2,6 @@ using MechanicsSoftware.API.Transport.Customers;
 using MechanicsSoftware.Application.UseCases.Customers.Commands;
 using MechanicsSoftware.Application.UseCases.Customers.Handlers;
 using MechanicsSoftware.Application.UseCases.Customers.Queries;
-using MechanicsSoftware.Domain.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +9,7 @@ namespace MechanicsSoftware.API.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-[Authorize(Policy = Policies.Staff)]
+[Authorize]
 public class CustomersController( // NOSONAR S6960: Clean Architecture — each action delegates to a dedicated handler
     CreateCustomerHandler createHandler,
     DeleteCustomerHandler deleteHandler,
