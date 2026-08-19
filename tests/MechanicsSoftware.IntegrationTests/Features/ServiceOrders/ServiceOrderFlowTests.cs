@@ -1,13 +1,19 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.IntegrationTests.Base;
 using MechanicsSoftware.IntegrationTests.Fixtures;
 using MechanicsSoftware.Infrastructure.Persistence;
+using MechanicsSoftware.Infrastructure.Security;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using MechanicsSoftware.Domain.Authorization;
 using MechanicsSoftware.Domain.Enums;
 
 namespace MechanicsSoftware.IntegrationTests.Features.ServiceOrders;
@@ -94,11 +100,15 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
 
         await DeliverAsync(client, orderId);
 
-        using var publicClient = Factory.CreateClient();
-        var publicResponse = await publicClient.GetAsync($"/api/service-orders/{orderId}/status");
-        publicResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var anonymousClient = Factory.CreateClient();
+        var anonymousResponse = await anonymousClient.GetAsync($"/api/service-orders/{orderId}/status");
+        anonymousResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        var publicStatus = await ReadAsync<ServiceOrderStatusDto>(publicResponse);
+        using var customerClient = CustomerClient(customerId);
+        var customerResponse = await customerClient.GetAsync($"/api/service-orders/{orderId}/status");
+        customerResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var publicStatus = await ReadAsync<ServiceOrderStatusDto>(customerResponse);
         publicStatus.Id.Should().Be(orderId);
         publicStatus.Status.Should().Be("DELIVERED");
         publicStatus.DeliveredAt.Should().NotBeNull();
@@ -221,6 +231,31 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
     // ========================================================================
     // Helper Methods
     // ========================================================================
+
+    private HttpClient CustomerClient(Guid customerId)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(WebApplicationFactoryFixture.JwtSecret));
+
+        var token = new JwtSecurityToken(
+            issuer: JwtSettings.DefaultIssuer,
+            audience: JwtSettings.DefaultAudience,
+            claims:
+            [
+                new Claim(JwtRegisteredClaimNames.Sub, customerId.ToString()),
+                new Claim("cpf", "11144477735"),
+                new Claim(JwtSettings.RoleClaimType, Policies.CustomerRole),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            ],
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+
+        var client = Factory.CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", new JwtSecurityTokenHandler().WriteToken(token));
+
+        return client;
+    }
 
     private async Task<HttpClient> AuthenticatedClientAsync()
     {

@@ -2,6 +2,7 @@ using MechanicsSoftware.API.Transport.Services;
 using MechanicsSoftware.Application.UseCases.Services.Commands;
 using MechanicsSoftware.Application.UseCases.Services.Handlers;
 using MechanicsSoftware.Application.UseCases.Services.Queries;
+using MechanicsSoftware.Domain.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,7 @@ namespace MechanicsSoftware.API.Controllers;
 
 [ApiController]
 [Route("api/services")]
-[Authorize]
+[Authorize(Policy = Policies.Staff)]
 public class ServicesController( // NOSONAR S6960: Clean Architecture — each action delegates to a dedicated handler
     CreateServiceHandler createHandler,
     GetServiceHandler getHandler,

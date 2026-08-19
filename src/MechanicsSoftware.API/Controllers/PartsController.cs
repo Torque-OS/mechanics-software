@@ -2,6 +2,7 @@ using MechanicsSoftware.API.Transport.Inventory;
 using MechanicsSoftware.Application.UseCases.Inventory.Commands;
 using MechanicsSoftware.Application.UseCases.Inventory.Handlers;
 using MechanicsSoftware.Application.UseCases.Inventory.Queries;
+using MechanicsSoftware.Domain.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,7 @@ namespace MechanicsSoftware.API.Controllers;
 
 [ApiController]
 [Route("api/parts")]
-[Authorize]
+[Authorize(Policy = Policies.Staff)]
 public class PartsController(CreatePartHandler createPart, // NOSONAR S6960: Clean Architecture — each action delegates to a dedicated handler
     DeletePartHandler deletePart,
     GetPartHandler getPart,
