@@ -10,8 +10,10 @@ using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.IntegrationTests.Base;
 using MechanicsSoftware.IntegrationTests.Fixtures;
 using MechanicsSoftware.Infrastructure.Persistence;
+using MechanicsSoftware.Infrastructure.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using MechanicsSoftware.Domain.Authorization;
 using MechanicsSoftware.Domain.Enums;
 
 namespace MechanicsSoftware.IntegrationTests.Features.ServiceOrders;
@@ -235,10 +237,14 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(WebApplicationFactoryFixture.JwtSecret));
 
         var token = new JwtSecurityToken(
+            issuer: JwtSettings.DefaultIssuer,
+            audience: JwtSettings.DefaultAudience,
             claims:
             [
-                new Claim("customerId", customerId.ToString()),
+                new Claim(JwtRegisteredClaimNames.Sub, customerId.ToString()),
                 new Claim("cpf", "11144477735"),
+                new Claim(JwtSettings.RoleClaimType, Policies.CustomerRole),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             ],
             expires: DateTime.UtcNow.AddMinutes(15),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
