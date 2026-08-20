@@ -214,11 +214,20 @@ dotnet dotnet-ef migrations remove \
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/auth/login` | Authenticate and receive JWT |
-| `GET` | `/api/service-orders/{id}/status` | Check service order status (for customers) |
+| `POST` | `/api/auth/login` | Authenticate as staff and receive a JWT |
 | `GET` | `/health` | Liveness/readiness probe |
 
 ### Protected endpoints (JWT required)
+
+A valid token is accepted whether it was issued by `POST /api/auth/login` here or by
+`POST /auth` on the API Gateway, which authenticates customers by CPF through
+[mechanics-lambda](https://github.com/Torque-OS/mechanics-lambda). Both sides sign with
+the same secret and algorithm.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/service-orders/{id}/status` | Check service order status |
+| `POST` | `/api/service-orders/{id}/budget-decision` | Approve or reject the budget |
 
 | Resource | Endpoints |
 |---|---|
@@ -314,7 +323,7 @@ POST /api/service-orders/{id}/complete
 POST /api/service-orders/{id}/deliver
 ```
 
-#### 5. Check status (public — no auth required)
+#### 5. Check status (JWT required)
 
 ```http
 GET /api/service-orders/{id}/status
