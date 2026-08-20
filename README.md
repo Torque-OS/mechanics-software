@@ -367,10 +367,7 @@ Manifests live in `k8s/` and target an AWS EKS cluster provisioned by Terraform.
 | `configmap.yaml` | Non-secret configuration |
 | `secret.yaml` | JWT secret, DB credentials, SMTP credentials |
 | `deployment-api.yaml` | API deployment (runs EF migrations via initContainer) |
-| `deployment-db.yaml` | PostgreSQL deployment |
 | `service-api.yaml` | LoadBalancer service for the API |
-| `service-db.yaml` | ClusterIP service for PostgreSQL |
-| `pvc.yaml` | Persistent volume claim for PostgreSQL data |
 | `hpa.yaml` | Horizontal Pod Autoscaler |
 
 ### Apply manually
