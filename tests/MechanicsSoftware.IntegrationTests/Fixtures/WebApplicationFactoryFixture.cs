@@ -17,7 +17,7 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
             .WithPassword("postgres")
             .Build();
 
-    private const string _jwtSecret = "test-secret-key-for-testing-only-min-32-chars-required-here";
+    public const string JwtSecret = "test-secret-key-for-testing-only-min-32-chars-required-here";
 
     public async Task InitializeAsync()
     {
@@ -47,7 +47,7 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
 
         builder.UseEnvironment("Test");
 
-        Environment.SetEnvironmentVariable("JWT_SECRET", _jwtSecret);
+        Environment.SetEnvironmentVariable("JWT_SECRET", JwtSecret);
         Environment.SetEnvironmentVariable("JWT_EXPIRATION_MINUTES", "60");
         Environment.SetEnvironmentVariable("SMTP_HOST", "localhost");
         Environment.SetEnvironmentVariable("SMTP_PORT", "1025");
