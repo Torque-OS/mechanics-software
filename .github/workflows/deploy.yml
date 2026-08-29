@@ -112,6 +112,7 @@ jobs:
 
       - name: Render secrets manifest
         env:
+          DB_HOST: ${{ secrets.DB_HOST }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GATEWAY_KEY: ${{ secrets.GATEWAY_KEY }}
