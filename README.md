@@ -448,6 +448,8 @@ dotnet test tests/MechanicsSoftware.IntegrationTests
 | ADR-004 Application Layer | [`docs/decisions/ADR-004-application-layer-conventions.md`](./docs/decisions/ADR-004-application-layer-conventions.md) |
 | ADR-005 Clean Architecture Migration | [`docs/decisions/ADR-005-clean-architecture-migration.md`](./docs/decisions/ADR-005-clean-architecture-migration.md) |
 | ADR-006 Database Migration Strategy | [`docs/decisions/ADR-006-database-migration-strategy.md`](./docs/decisions/ADR-006-database-migration-strategy.md) |
+| Sequence — CPF Authentication | [`docs/architecture/sequence-cpf-auth.md`](./docs/architecture/sequence-cpf-auth.md) |
+| Sequence — Service Order Opening | [`docs/architecture/sequence-service-order-opening.md`](./docs/architecture/sequence-service-order-opening.md) |
 
 ---
 
