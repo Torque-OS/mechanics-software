@@ -6,7 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 
-public sealed class CompleteServiceOrderHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<CompleteServiceOrderHandler> logger)
+public sealed class CompleteServiceOrderHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<CompleteServiceOrderHandler> logger,
+    IServiceOrderMetrics? metrics = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -27,6 +31,13 @@ public sealed class CompleteServiceOrderHandler(IAppDbContext db, IEmailNotifier
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Service order completed {EventName} {ServiceOrderId} {OccurredAt}",
+            "service_order.completed",
+            order.Id,
+            order.CompletedAt);
+        metrics?.OrderCompleted();
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 
