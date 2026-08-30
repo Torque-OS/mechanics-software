@@ -98,3 +98,9 @@ public sealed record AverageExecutionTimeResponse(
     double AverageHours,
     int OrderCount
 );
+
+public sealed record DailyServiceOrderVolumeResponse(
+    DateTime Date,
+    int Opened,
+    int Closed
+);

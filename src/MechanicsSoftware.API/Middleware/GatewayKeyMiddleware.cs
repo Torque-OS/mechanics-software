@@ -59,7 +59,8 @@ public sealed partial class GatewayKeyMiddleware
     // Kubernetes probes and load balancer health checks reach the pod directly,
     // so they never carry the header.
     private static bool IsExempt(PathString path) =>
-        path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase);
+        path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase);
 
     private bool IsAuthorized(string providedKey)
     {
