@@ -418,6 +418,15 @@ docs/
 | ADR-008 Lambda Authorizer | [`docs/decisions/ADR-008-lambda-authorizer.md`](./docs/decisions/ADR-008-lambda-authorizer.md) |
 | ADR-009 HPA Autoscaling | [`docs/decisions/ADR-009-hpa-autoscaling.md`](./docs/decisions/ADR-009-hpa-autoscaling.md) |
 | Event Storming | [`docs/domain/event-storming.md`](./docs/domain/event-storming.md) |
+| Ubiquitous Language | [`docs/domain/ubiquitous-language.md`](./docs/domain/ubiquitous-language.md) |
+| Aggregates & Entities | [`docs/domain/aggregates-and-entities.md`](./docs/domain/aggregates-and-entities.md) |
+| Bounded Contexts | [`docs/domain/bounded-contexts.md`](./docs/domain/bounded-contexts.md) |
+| ADR-001 Tech Stack | [`docs/decisions/ADR-001-tech-stack.md`](./docs/decisions/ADR-001-tech-stack.md) |
+| ADR-002 Architecture | [`docs/decisions/ADR-002-architecture.md`](./docs/decisions/ADR-002-architecture.md) |
+| ADR-003 Database | [`docs/decisions/ADR-003-database.md`](./docs/decisions/ADR-003-database.md) |
+| ADR-004 Application Layer | [`docs/decisions/ADR-004-application-layer-conventions.md`](./docs/decisions/ADR-004-application-layer-conventions.md) |
+| ADR-005 Clean Architecture Migration | [`docs/decisions/ADR-005-clean-architecture-migration.md`](./docs/decisions/ADR-005-clean-architecture-migration.md) |
+| Database Justification + ER Diagram | [`docs/database/database-justification.md`](./docs/database/database-justification.md) |
 | Postman Collection | [`MechanicsSoftware.postman_collection.json`](./MechanicsSoftware.postman_collection.json) |
 
 ---
