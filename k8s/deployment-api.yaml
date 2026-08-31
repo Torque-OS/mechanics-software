@@ -14,6 +14,9 @@ spec:
     metadata:
       labels:
         app: mechanics-software-api
+      annotations:
+        ad.datadoghq.com/api.checks: >-
+          {"openmetrics":{"init_config":{},"instances":[{"openmetrics_endpoint":"http://%%host%%:8080/metrics","namespace":"mechanics","metrics":["mechanics_service_orders_opened_total","mechanics_service_orders_completed_total","mechanics_service_orders_average_execution_time_hours","mechanics_service_orders_execution_time_order_count"]}]}}
     spec:
       imagePullSecrets:
         - name: ghcr-secret

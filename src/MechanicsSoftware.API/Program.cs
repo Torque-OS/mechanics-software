@@ -21,6 +21,7 @@ builder.Services.AddSwaggerDocumentation();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<IServiceOrderMetrics, PrometheusServiceOrderMetrics>();
+builder.Services.AddHostedService<ServiceOrderMetricsRefreshService>();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
 builder.Services.AddControllers(options =>
@@ -36,8 +37,8 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-app.UseMiddleware<GatewayKeyMiddleware>();
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<GatewayKeyMiddleware>();
 app.UseHttpMetrics();
 
 app.UseSwagger();
