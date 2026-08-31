@@ -13,6 +13,7 @@ flowchart TB
     %% ── External actors ──────────────────────────────────────────────
     Client(["👤 Client\n(browser / mobile / curl)"])
     SMTP(["📧 SMTP Server\n(email notifications)"])
+    Datadog(["🐕 Datadog SaaS\n(metrics · logs · dashboards · alerts)"])
 
     %% ── GitHub ───────────────────────────────────────────────────────
     subgraph GitHub["GitHub — Torque-OS"]
@@ -46,12 +47,13 @@ flowchart TB
                     direction TB
                     subgraph NS["Namespace: mechanics-software"]
                         HPA["HPA\nmin 2 · max 10 · cpu 70%"]
-                        DEP["Deployment\nASP.NET Core 8\n2–10 pods"]
+                        DEP["Deployment\nASP.NET Core 8\n2–10 pods\n/metrics (Prometheus)"]
                         SVC["Service\n(internal NLB)"]
                         INIT["initContainer\ndotnet-ef migrate"]
                         CM["ConfigMap"]
                         SEC["Secret\n(JWT_SECRET, DB, SMTP, GATEWAY_KEY)"]
                     end
+                    DD_AGENT["Datadog Agent\n(DaemonSet — Helm)\ncollects metrics + logs"]
                 end
 
                 VPCLINK["VPC Link"]
@@ -105,6 +107,12 @@ flowchart TB
     %% ── Logging ──────────────────────────────────────────────────────
     APIGW -->|"access logs"| CW
 
+    %% ── Monitoring ───────────────────────────────────────────────────
+    DD_AGENT -->|"scrape /metrics\n(Prometheus)"| DEP
+    DD_AGENT -->|"collect pod logs\n(JSON + correlation ID)"| DEP
+    DD_AGENT -->|"ship metrics + logs"| Datadog
+    CW -->|"log forwarding"| Datadog
+
     %% ── Styles ───────────────────────────────────────────────────────
     style AWS fill:#f0f7ff,stroke:#4a90d9
     style VPC fill:#e8f4e8,stroke:#5a9e5a
@@ -117,6 +125,8 @@ flowchart TB
     style CI fill:#eeeeee,stroke:#aaa
     style RDS fill:#fce8e8,stroke:#c03030
     style APIGW fill:#fff0e6,stroke:#e07000
+    style Datadog fill:#f5e6ff,stroke:#7b2d8b
+    style DD_AGENT fill:#f5e6ff,stroke:#7b2d8b
 ```
 
 ---
@@ -129,6 +139,7 @@ flowchart TB
 |-----------|-------------|
 | Client | Any HTTP client — browser, mobile app, or `curl` |
 | SMTP Server | External mail relay used by `SmtpEmailNotifier` to send status-change notifications to customers |
+| Datadog SaaS | Observability platform — receives metrics, logs, and traces; hosts dashboards and alert rules |
 
 ### GitHub (Torque-OS org)
 
@@ -160,6 +171,7 @@ flowchart TB
 | mechanics-lambda | AWS Lambda (Node.js 20) | mechanics-lambda | `handler.js` — validates CPF, queries `customers` table, issues JWT |
 | mechanics-lambda-authorizer | AWS Lambda (Node.js 20) | mechanics-lambda | `authorizer.js` — verifies JWT; result cached 300 s per token at API Gateway |
 | RDS PostgreSQL 16 | db.t3.micro | mechanics-infra-db | Single database `mechanicssoftware`; consumed by both the API and the issuer Lambda |
+| Datadog Agent | DaemonSet (Helm) | mechanics-infra-k8s | Runs on every EKS node — scrapes Prometheus `/metrics` from API pods, collects structured JSON logs (with correlation ID), ships everything to Datadog SaaS |
 
 ---
 
