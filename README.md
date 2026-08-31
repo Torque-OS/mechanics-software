@@ -2,246 +2,142 @@
   <img src="docs/logo.png" alt="Torque-OS" width="220"/>
 </p>
 
-# Mechanics Software
+# mechanics-software
 
-Backend system for a mechanic shop — built as the Tech Challenge for FIAP POS Tech (15SOAT), covering Phase 1 and Phase 2.
+Backend API for a mechanic shop — the core application of the [Torque-OS](https://github.com/Torque-OS) platform. Built as the Tech Challenge for FIAP POS Tech (15SOAT).
 
-## Overview
-
-A RESTful API that manages the full lifecycle of service orders, customers, vehicles, parts, and inventory for a medium-sized auto repair shop. On every service order status change, the customer receives an automatic email notification.
-
-**Architecture:** Clean Architecture + DDD Domain  
-**Stack:** C# 12 · ASP.NET Core 8 · PostgreSQL 16 · Entity Framework Core 8  
-**Infra:** Docker · Kubernetes (AWS EKS) · Terraform  
-**Docs:** [`/docs`](./docs)
+> **Part of the [Torque-OS](https://github.com/Torque-OS) platform** — see [how repos link together](#platform-overview) below.
 
 ---
 
-## Fase 2
-
-Fase 2 expands Fase 1 with **Clean Architecture**, **automated email notifications**, **Kubernetes on AWS EKS**, **Terraform IaC**, and a **GitHub Actions CI/CD pipeline** — turning the original monolith into a production-ready, scalable system.
-
-### Architecture
+## Platform Overview
 
 ```
-GitHub Actions (CI/CD)
+Internet
+  │
+  └─ API Gateway (HTTP API v2)         ← mechanics-infra-k8s
         │
-        ├─ coverage.yml ──→ unit tests · 80% coverage gate · GitHub Pages report
+        ├── POST /auth  ── Lambda CPF Auth    ← mechanics-lambda
+        │                       │
+        │               RDS PostgreSQL 16     ← mechanics-infra-db
         │
-        └─ deploy.yml ──→ docker build · push GHCR · EF migrations · kubectl apply
-                                                              │
-                                                              ▼
-                                              AWS EKS Cluster  (Terraform-provisioned VPC + EKS)
-                                    ┌─────────────────────────────────────────────┐
-                                    │  Namespace: mechanics-software              │
-                                    │                                             │
-                                    │  ┌─────────────────────┐                   │
-                                    │  │  API Deployment     │◄── HPA            │
-                                    │  │  ASP.NET Core 8     │    (auto-scale)   │
-                                    │  │  N replicas         │                   │
-                                    │  └──────────┬──────────┘                   │
-                                    │             │ ClusterIP                    │
-                                    │             ▼                              │
-                                    │  ┌─────────────────────┐                   │
-                                    │  │  PostgreSQL 16      │◄── PVC            │
-                                    │  └─────────────────────┘    (persistent)   │
-                                    │                                             │
-                                    │  LoadBalancer ──────────────────► Internet │
-                                    └─────────────────────────────────────────────┘
+        ├── POST /api/auth/login  ─────────────────────────────────────┐
+        ├── GET  /health          ─────────────────────────────────────┤ no authorizer
+        │                                                              │
+        └── ANY /{proxy+}  ── Lambda Authorizer  ← mechanics-lambda   │
+                  │ (JWT valid)                                        │
+                  ▼                                                    ▼
+               VPC Link ── NLB ── EKS Pods (THIS REPO) ──── RDS PostgreSQL 16
+                                        │                   ← mechanics-infra-db
+                          GatewayKeyMiddleware validates
+                          X-Gateway-Key header
 ```
 
-### Deploy flow
-
-```
-git push → main
-    │
-    ├── coverage.yml  →  dotnet test  →  enforce 80% line coverage  →  publish HTML report
-    │
-    └── deploy.yml    →  docker build  →  push to GHCR
-                              │
-                              └─→  kubectl apply (initContainer runs EF migrations first)
-```
-
-### Demo video
-
-[Watch on YouTube](https://youtu.be/vqERT_zrLpo)
+**This repo** is the API that runs inside EKS. All external traffic passes through the API Gateway — the cluster load balancer has no public address.
 
 ---
 
-## Getting Started
+## What This Repo Does
 
-### Prerequisites
+A RESTful API that manages the full lifecycle of service orders for an auto repair shop:
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Docker](https://www.docker.com/products/docker-desktop) + Docker Compose
+- **Customers & Vehicles** — CRUD with Brazilian document types (CPF/CNPJ).
+- **Parts & Services Catalogue** — inventory with stock tracking.
+- **Service Orders** — full lifecycle: RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED → DELIVERED (or CANCELLED).
+- **Budget** — generated per service order, approved or rejected by the customer.
+- **Email notifications** — every status transition sends an email to the customer via SMTP.
+- **Staff authentication** — email + password login at `POST /api/auth/login`; customers authenticate by CPF via `mechanics-lambda`.
+- **Gateway Key** — validates that requests arrived through the API Gateway (defence in depth).
 
-### Run with Docker (recommended)
+**Stack:** C# 12 · ASP.NET Core 8 · Entity Framework Core 8 · PostgreSQL 16  
+**Architecture:** Clean Architecture + DDD Domain — see [`docs/decisions/`](./docs/decisions/)
+
+---
+
+## Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.x | `dotnet --version` |
+| [Docker](https://www.docker.com/products/docker-desktop) | ≥ 24 | for `docker compose` |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | ≥ 1.28 | for Kubernetes deploy |
+| [AWS CLI](https://aws.amazon.com/cli/) | ≥ 2 | for EKS kubeconfig |
+
+---
+
+## Running Locally
+
+### Option A — Docker Compose (recommended)
+
+Starts the API and PostgreSQL together:
 
 ```bash
 docker compose up --build
 ```
 
-API available at: `http://localhost:8080`  
-Swagger UI: `http://localhost:8080/swagger`
+| Endpoint | URL |
+|---|---|
+| API | `http://localhost:8080` |
+| Swagger UI | `http://localhost:8080/swagger` |
+| PostgreSQL | `localhost:5435` |
 
-> Migrations and the default admin user are applied automatically on startup.
+Migrations and the default admin user are applied automatically on startup.
 
-### Run locally (step by step)
+### Option B — dotnet run
 
-**1. Start the database**
+**1. Start only the database:**
 
 ```bash
 docker compose up db -d
 ```
 
-PostgreSQL will be available at `localhost:5435`.
-
-**2. Run the API**
+**2. Configure environment variables:**
 
 ```bash
+cp env.example .env
+# defaults work for local dev — no changes needed for a quick start
+```
+
+**3. Restore the local EF Core tool and run:**
+
+```bash
+dotnet tool restore
 dotnet run --project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj
 ```
 
-Swagger UI: `http://localhost:5066/swagger`
-
-On first startup the application automatically applies all pending migrations and creates a default admin user.
-
----
-
-## Authentication
-
-### Default admin credentials
-
-| Field | Value |
+| Endpoint | URL |
 |---|---|
-| Email | `admin@mechanics.local` |
-| Password | `Admin@123` |
-
-Override with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` environment variables.
-
-### Getting a token
-
-Call `POST /api/auth/login` with the credentials above:
-
-```json
-{
-  "email": "admin@mechanics.local",
-  "password": "Admin@123"
-}
-```
-
-Copy the `token` from the response.
-
-### Using the token in Swagger
-
-1. Open `http://localhost:5066/swagger`
-2. Click the **Authorize** button (🔒)
-3. Paste the token value and click **Authorize**
-
-All protected endpoints will now work.
+| API | `http://localhost:5066` |
+| Swagger UI | `http://localhost:5066/swagger` |
 
 ---
 
 ## Environment Variables
 
+All variables with a default work out of the box for local development. Production values are provided via Kubernetes Secrets (rendered by `k8s/secret.yaml` in CI/CD).
+
 | Variable | Required | Description | Default |
 |---|---|---|---|
-| `JWT_SECRET` | **Yes** (production) | Secret key for JWT signing (min 32 chars) | pre-configured in `appsettings.Development.json` |
-| `DATABASE_URL` | No | PostgreSQL connection string | see `appsettings.Development.json` |
-| `JWT_EXPIRATION_MINUTES` | No | Token expiration in minutes | `60` |
+| `ConnectionStrings__DefaultConnection` | Yes | PostgreSQL connection string | set in `appsettings.Development.json` |
+| `JWT_SECRET` | Yes | Signing secret — **min 32 chars** — **must match `mechanics-lambda`** | pre-configured for dev |
+| `JWT_EXPIRATION_MINUTES` | No | Token lifetime in minutes | `60` |
+| `GATEWAY_KEY` | No* | Shared secret with API Gateway. When set, requests without `X-Gateway-Key` are rejected with 403. Leave empty locally. | `` (disabled) |
 | `BCRYPT_SALT_ROUNDS` | No | BCrypt cost factor | `12` |
-| `SEED_ADMIN_EMAIL` | No | Default admin email | `admin@mechanics.local` |
-| `SEED_ADMIN_PASSWORD` | No | Default admin password | `Admin@123` |
-| `SMTP_HOST` | **Yes** (production) | SMTP server hostname | — |
-| `SMTP_PORT` | **Yes** (production) | SMTP server port (e.g. `587`) | — |
-| `SMTP_USER` | **Yes** (production) | SMTP username | — |
-| `SMTP_PASS` | **Yes** (production) | SMTP password | — |
-| `SMTP_FROM` | **Yes** (production) | Sender address for notification emails | — |
+| `SEED_ADMIN_EMAIL` | No | Auto-created admin email | `admin@mechanics.local` |
+| `SEED_ADMIN_PASSWORD` | No | Auto-created admin password | `Admin@123` |
+| `SMTP_HOST` | Yes (email) | SMTP server hostname | — |
+| `SMTP_PORT` | Yes (email) | SMTP port — use `587` (STARTTLS) | — |
+| `SMTP_USER` | Yes (email) | SMTP username | — |
+| `SMTP_PASS` | Yes (email) | SMTP password or App Password | — |
+| `SMTP_FROM` | Yes (email) | Sender address | — |
+
+> *`GATEWAY_KEY` must match the `gateway_key` Terraform variable in `mechanics-infra-k8s`.
 
 ---
 
-## Email Notifications
+## Authentication
 
-Every service order status change triggers an automatic email to the customer. The email is sent by `SmtpEmailNotifier` (Infrastructure layer), which implements the `IEmailNotifier` abstraction defined in the Application layer.
-
-Notifications are sent on the following transitions:
-
-| Transition | Handler |
-|---|---|
-| RECEIVED → IN_DIAGNOSIS | `StartDiagnosisHandler` |
-| IN_DIAGNOSIS → AWAITING_APPROVAL | `SendBudgetHandler` |
-| AWAITING_APPROVAL → IN_EXECUTION | `ApproveServiceOrderHandler` |
-| AWAITING_APPROVAL → CANCELLED | `RejectServiceOrderHandler` |
-| IN_EXECUTION → COMPLETED | `CompleteServiceOrderHandler` |
-| COMPLETED → DELIVERED | `DeliverServiceOrderHandler` |
-
----
-
-## Database Migrations
-
-The project uses a local `dotnet-ef` tool pinned in `.config/dotnet-tools.json`. Run `dotnet tool restore` once to install it, then use `dotnet dotnet-ef` instead of `dotnet ef`.
-
-### Apply existing migrations
-
-```bash
-dotnet dotnet-ef database update \
-  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
-  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj
-```
-
-### Add a new migration
-
-```bash
-dotnet dotnet-ef migrations add <MigrationName> \
-  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
-  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj \
-  --output-dir Persistence/Migrations
-```
-
-### Remove the last migration (if not yet applied)
-
-```bash
-dotnet dotnet-ef migrations remove \
-  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
-  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj
-```
-
----
-
-## API
-
-### Public endpoints (no authentication)
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/auth/login` | Authenticate as staff and receive a JWT |
-| `GET` | `/health` | Liveness/readiness probe |
-
-### Protected endpoints (JWT required)
-
-A valid token is accepted whether it was issued by `POST /api/auth/login` here or by
-`POST /auth` on the API Gateway, which authenticates customers by CPF through
-[mechanics-lambda](https://github.com/Torque-OS/mechanics-lambda). Both sides sign with
-the same secret and algorithm.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/service-orders/{id}/status` | Check service order status |
-| `POST` | `/api/service-orders/{id}/budget-decision` | Approve or reject the budget |
-
-| Resource | Endpoints |
-|---|---|
-| Customers | `GET/POST /api/customers` · `GET/PUT/DELETE /api/customers/{id}` |
-| Vehicles | `GET/POST /api/vehicles` · `GET/PUT/DELETE /api/vehicles/{id}` |
-| Parts | `GET/POST /api/parts` · `GET/PUT/DELETE /api/parts/{id}` · `PATCH /api/parts/{id}/stock` |
-| Services | `GET/POST /api/services` · `GET/PUT/DELETE /api/services/{id}` |
-| Service Orders | `GET/POST /api/service-orders` · full lifecycle via action endpoints |
-
-Full documentation and request/response schemas available at `/swagger` when running.
-
-### Usage examples
-
-#### 1. Authenticate
+### Staff login
 
 ```http
 POST /api/auth/login
@@ -254,12 +150,73 @@ Content-Type: application/json
 ```
 
 ```json
-{ "token": "<JWT>" }
+{ "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
 ```
 
-Use the token as `Authorization: Bearer <JWT>` on all protected requests.
+Use `Authorization: Bearer <token>` on all protected endpoints.
 
-#### 2. Create a customer
+### Default admin credentials
+
+| Field | Value |
+|---|---|
+| Email | `admin@mechanics.local` |
+| Password | `Admin@123` |
+
+Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
+
+### Swagger UI
+
+1. Open `/swagger`
+2. Click **Authorize** (🔒)
+3. Paste the token → **Authorize**
+
+---
+
+## API Endpoints
+
+### Public (no token required)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | Staff login — returns JWT |
+| `GET` | `/api/service-orders/{id}/status` | Customer status check (shareable link) |
+| `GET` | `/health` | Liveness/readiness probe |
+
+### Protected (JWT required)
+
+| Resource | Endpoints |
+|---|---|
+| Customers | `GET/POST /api/customers` · `GET/PUT/DELETE /api/customers/{id}` |
+| Vehicles | `GET/POST /api/vehicles` · `GET/PUT/DELETE /api/vehicles/{id}` |
+| Parts | `GET/POST /api/parts` · `GET/PUT/DELETE /api/parts/{id}` · `PATCH /api/parts/{id}/stock` |
+| Services | `GET/POST /api/services` · `GET/PUT/DELETE /api/services/{id}` |
+| Service Orders | `GET/POST /api/service-orders` · lifecycle endpoints below |
+
+### Service Order Lifecycle
+
+```
+RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED → DELIVERED
+                                   ↓
+                               CANCELLED
+```
+
+| Step | Endpoint |
+|---|---|
+| Start diagnosis | `POST /api/service-orders/{id}/start-diagnosis` |
+| Add service item | `POST /api/service-orders/{id}/services` |
+| Add part item | `POST /api/service-orders/{id}/parts` |
+| Generate budget | `POST /api/service-orders/{id}/budget` |
+| Send budget | `POST /api/service-orders/{id}/send-budget` |
+| Approve/reject | `POST /api/service-orders/{id}/budget-decision` with `{ "decision": "approve" \| "reject" }` |
+| Start execution | `POST /api/service-orders/{id}/start-execution` |
+| Complete | `POST /api/service-orders/{id}/complete` |
+| Deliver | `POST /api/service-orders/{id}/deliver` |
+
+Full schemas available at `/swagger`.
+
+### Quick Examples
+
+#### Create a customer
 
 ```http
 POST /api/customers
@@ -268,18 +225,14 @@ Content-Type: application/json
 
 {
   "name": "João da Silva",
-  "documentValue": "123.456.789-09",
+  "documentValue": "529.982.247-25",
   "personType": "INDIVIDUAL",
   "email": "joao@example.com",
   "phone": "(11) 99999-0001"
 }
 ```
 
-```json
-{ "id": "3fa85f64-...", "name": "João da Silva", ... }
-```
-
-#### 3. Open a service order
+#### Open a service order
 
 ```http
 POST /api/service-orders
@@ -293,40 +246,13 @@ Content-Type: application/json
 ```
 
 ```json
-{ "id": "<order-id>", "status": "RECEIVED", ... }
+{ "id": "<order-id>", "status": "RECEIVED" }
 ```
 
-#### 4. Progress through the lifecycle
+#### Check status (public, no token)
 
 ```http
-# Move to diagnosis
-POST /api/service-orders/{id}/start-diagnosis
-
-# Add a service and a part
-POST /api/service-orders/{id}/services
-{ "serviceId": "<id>", "quantity": 1 }
-
-POST /api/service-orders/{id}/parts
-{ "partId": "<id>", "quantity": 2 }
-
-# Generate and send budget to customer (triggers email)
-POST /api/service-orders/{id}/budget
-POST /api/service-orders/{id}/send-budget
-
-# Customer approves or rejects
-POST /api/service-orders/{id}/budget-decision
-{ "decision": "approve" }   # or "reject"
-
-# Complete and deliver
-POST /api/service-orders/{id}/start-execution
-POST /api/service-orders/{id}/complete
-POST /api/service-orders/{id}/deliver
-```
-
-#### 5. Check status (JWT required)
-
-```http
-GET /api/service-orders/{id}/status
+GET /api/service-orders/<order-id>/status
 ```
 
 ```json
@@ -335,12 +261,125 @@ GET /api/service-orders/{id}/status
 
 ---
 
-## Service Order Lifecycle
+## Testing
 
+### Unit tests
+
+```bash
+dotnet test tests/MechanicsSoftware.UnitTests
 ```
-RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED → DELIVERED
-                                    ↓
-                                CANCELLED
+
+### Unit tests with coverage report
+
+```bash
+dotnet test tests/MechanicsSoftware.UnitTests \
+  --collect:"XPlat Code Coverage" \
+  --settings coverlet.runsettings \
+  --results-directory ./coverage-results
+```
+
+### Integration tests
+
+Require Docker (PostgreSQL is started automatically via Testcontainers):
+
+```bash
+dotnet test tests/MechanicsSoftware.IntegrationTests
+```
+
+### Coverage threshold
+
+CI enforces **80% line coverage**. HTML report: [rnataoliveira.github.io/mechanics-software](https://rnataoliveira.github.io/mechanics-software/)
+
+---
+
+## Database Migrations
+
+The project pins `dotnet-ef` in `.config/dotnet-tools.json`. Run `dotnet tool restore` once.
+
+```bash
+# Apply all pending migrations
+dotnet dotnet-ef database update \
+  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
+  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj
+
+# Add a new migration
+dotnet dotnet-ef migrations add <Name> \
+  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
+  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj \
+  --output-dir Persistence/Migrations
+
+# Remove last migration (only if not applied)
+dotnet dotnet-ef migrations remove \
+  --project src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj \
+  --startup-project src/MechanicsSoftware.API/MechanicsSoftware.API.csproj
+```
+
+In production (EKS), migrations run in an **init container** before the API pod starts — see [ADR-006](./docs/decisions/ADR-006-database-migration-strategy.md).
+
+---
+
+## Kubernetes Deploy
+
+Manifests in `k8s/` target the EKS cluster provisioned by `mechanics-infra-k8s`.
+
+| File | Purpose |
+|---|---|
+| `namespace.yaml` | `mechanics-software` namespace |
+| `configmap.yaml` | Non-secret configuration |
+| `secret.yaml` | DB connection string, JWT secret, SMTP, Gateway Key |
+| `deployment-api.yaml` | API Deployment with EF migrations init container |
+| `service-api.yaml` | Internal NLB — only reachable via API Gateway VPC Link |
+| `hpa.yaml` | HPA: 2–10 replicas, scale at 70% CPU |
+
+> From Fase 3, PostgreSQL runs on RDS. Do **not** apply `deployment-db.yaml` / `pvc.yaml` to the cloud cluster.
+
+### Manual apply
+
+```bash
+# Get kubeconfig
+aws eks update-kubeconfig --name mechanics-software --region us-east-1
+
+# Apply (secret.yaml uses envsubst — set the vars first or let CI render them)
+kubectl apply -f k8s/
+
+# Watch the rollout (init container runs migrations first)
+kubectl rollout status deployment/mechanics-software-api -n mechanics-software
+
+# Confirm the NLB is ready (needed for mechanics-infra-k8s pass 2)
+kubectl get svc mechanics-software-api -n mechanics-software
+```
+
+---
+
+## CI/CD Pipeline
+
+| Workflow | File | Trigger | What it does |
+|---|---|---|---|
+| Coverage Report | `.github/workflows/coverage.yml` | Every PR/push to `main` | Build → unit tests → 80% gate → GitHub Pages |
+| Deploy | `.github/workflows/deploy.yml` | After Coverage passes on `main` | Docker build → GHCR push → init container migrations → `kubectl apply` |
+
+### GitHub Secrets required
+
+| Secret | Description |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | AWS Academy key |
+| `AWS_SECRET_ACCESS_KEY` | AWS Academy secret |
+| `AWS_SESSION_TOKEN` | AWS Academy session token (rotate each lab session) |
+| `DB_PASSWORD` | RDS master password (from `mechanics-infra-db` output) |
+| `JWT_SECRET` | **Must match `mechanics-lambda`** |
+| `GATEWAY_KEY` | **Must match `gateway_key` in `mechanics-infra-k8s`** |
+| `SMTP_HOST` | SMTP server |
+| `SMTP_PORT` | SMTP port |
+| `SMTP_USER` | SMTP username |
+| `SMTP_PASS` | SMTP password |
+| `SMTP_FROM` | Sender address |
+
+```bash
+gh secret set JWT_SECRET    --repo Torque-OS/mechanics-software
+gh secret set GATEWAY_KEY   --repo Torque-OS/mechanics-software
+gh secret set DB_PASSWORD   --repo Torque-OS/mechanics-software
+gh secret set SMTP_HOST     --repo Torque-OS/mechanics-software
+# ... etc
 ```
 
 ---
@@ -349,95 +388,35 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED �
 
 ```
 src/
-  MechanicsSoftware.Domain/          # Entities, value objects, domain rules (innermost layer)
-  MechanicsSoftware.Application/     # Use cases, command/query handlers, abstractions (IEmailNotifier, IAppDbContext)
-  MechanicsSoftware.Infrastructure/  # EF Core, JWT, BCrypt, SmtpEmailNotifier
+  MechanicsSoftware.Domain/          # Entities, value objects, domain rules (pure — no framework)
+  MechanicsSoftware.Application/     # Use cases (Commands, Handlers, Queries), abstractions
+  MechanicsSoftware.Infrastructure/  # EF Core, JWT, BCrypt, SmtpEmailNotifier, GatewayKey
   MechanicsSoftware.API/             # Controllers, middleware, Swagger, DI composition root
 
 tests/
-  MechanicsSoftware.UnitTests/       # Domain + Application + Infrastructure unit tests
-  MechanicsSoftware.IntegrationTests/ # Full HTTP integration tests (WebApplicationFactory)
+  MechanicsSoftware.UnitTests/        # Domain + Application + Infrastructure unit tests
+  MechanicsSoftware.IntegrationTests/ # Full HTTP tests (WebApplicationFactory + Testcontainers)
 
-k8s/                                 # Kubernetes manifests (AWS EKS)
-infra/                               # Terraform IaC (VPC + EKS cluster)
-```
-
-See [`docs/architecture/overview.md`](./docs/architecture/overview.md) for full details.
-
----
-
-## Kubernetes
-
-Manifests live in `k8s/` and target an AWS EKS cluster provisioned by Terraform.
-
-| File | Purpose |
-|---|---|
-| `namespace.yaml` | Dedicated namespace |
-| `configmap.yaml` | Non-secret configuration |
-| `secret.yaml` | JWT secret, DB credentials, SMTP credentials |
-| `deployment-api.yaml` | API deployment (runs EF migrations via initContainer) |
-| `service-api.yaml` | LoadBalancer service for the API |
-| `hpa.yaml` | Horizontal Pod Autoscaler |
-
-### Apply manually
-
-```bash
-kubectl apply -f k8s/
-```
-
----
-
-## Terraform
-
-Infrastructure is defined in `infra/` using the `terraform-aws-modules/eks/aws` and `terraform-aws-modules/vpc/aws` modules.
-
-```bash
-cd infra
-terraform init
-terraform plan
-terraform apply
-```
-
-See [`infra/README.md`](./infra/README.md) for variable descriptions and prerequisites.
-
----
-
-## CI/CD Pipeline
-
-Two GitHub Actions workflows run on every push/PR to `main`:
-
-| Workflow | File | What it does |
-|---|---|---|
-| Coverage Report | `.github/workflows/coverage.yml` | Builds, runs unit tests, enforces 80% line coverage, publishes HTML report to GitHub Pages |
-| Deploy | `.github/workflows/deploy.yml` | Builds & pushes Docker image to GHCR, runs EF Core migrations via initContainer, applies K8s manifests to EKS |
-
-Coverage report: [rnataoliveira.github.io/mechanics-software](https://rnataoliveira.github.io/mechanics-software/)
-
----
-
-## Running Tests
-
-```bash
-# Unit tests
-dotnet test tests/MechanicsSoftware.UnitTests
-
-# Unit tests with coverage report
-dotnet test tests/MechanicsSoftware.UnitTests \
-  --collect:"XPlat Code Coverage" \
-  --settings coverlet.runsettings \
-  --results-directory ./coverage-results
-
-# Integration tests (requires Docker — starts PostgreSQL automatically)
-dotnet test tests/MechanicsSoftware.IntegrationTests
+k8s/                                 # Kubernetes manifests
+docs/
+  decisions/                         # ADR-001 → ADR-009
+  rfc/                               # RFC-001 (Fase 3 architecture)
+  domain/                            # Event Storming, Ubiquitous Language, Bounded Contexts
+  architecture/                      # Architecture overview
 ```
 
 ---
 
 ## Documentation
 
-| Document | Path |
+| Document | |
 |---|---|
 | Architecture Overview | [`docs/architecture/overview.md`](./docs/architecture/overview.md) |
+| RFC-001 — Fase 3 decisions | [`docs/rfc/RFC-001-fase3-cloud-db-auth.md`](./docs/rfc/RFC-001-fase3-cloud-db-auth.md) |
+| ADR-006 DB Migration Strategy | [`docs/decisions/ADR-006-database-migration-strategy.md`](./docs/decisions/ADR-006-database-migration-strategy.md) |
+| ADR-007 Communication Pattern | [`docs/decisions/ADR-007-communication-pattern.md`](./docs/decisions/ADR-007-communication-pattern.md) |
+| ADR-008 Lambda Authorizer | [`docs/decisions/ADR-008-lambda-authorizer.md`](./docs/decisions/ADR-008-lambda-authorizer.md) |
+| ADR-009 HPA Autoscaling | [`docs/decisions/ADR-009-hpa-autoscaling.md`](./docs/decisions/ADR-009-hpa-autoscaling.md) |
 | Event Storming | [`docs/domain/event-storming.md`](./docs/domain/event-storming.md) |
 | Ubiquitous Language | [`docs/domain/ubiquitous-language.md`](./docs/domain/ubiquitous-language.md) |
 | Aggregates & Entities | [`docs/domain/aggregates-and-entities.md`](./docs/domain/aggregates-and-entities.md) |
@@ -447,13 +426,18 @@ dotnet test tests/MechanicsSoftware.IntegrationTests
 | ADR-003 Database | [`docs/decisions/ADR-003-database.md`](./docs/decisions/ADR-003-database.md) |
 | ADR-004 Application Layer | [`docs/decisions/ADR-004-application-layer-conventions.md`](./docs/decisions/ADR-004-application-layer-conventions.md) |
 | ADR-005 Clean Architecture Migration | [`docs/decisions/ADR-005-clean-architecture-migration.md`](./docs/decisions/ADR-005-clean-architecture-migration.md) |
-| ADR-006 Database Migration Strategy | [`docs/decisions/ADR-006-database-migration-strategy.md`](./docs/decisions/ADR-006-database-migration-strategy.md) |
 | Database Justification + ER Diagram | [`docs/database/database-justification.md`](./docs/database/database-justification.md) |
+| Component Diagram — Fase 3 Cloud | [`docs/architecture/component-diagram-fase3.md`](./docs/architecture/component-diagram-fase3.md) |
 | Sequence — CPF Authentication | [`docs/architecture/sequence-cpf-auth.md`](./docs/architecture/sequence-cpf-auth.md) |
 | Sequence — Service Order Opening | [`docs/architecture/sequence-service-order-opening.md`](./docs/architecture/sequence-service-order-opening.md) |
+| Postman Collection | [`MechanicsSoftware.postman_collection.json`](./MechanicsSoftware.postman_collection.json) |
 
 ---
 
-## Contributing
+## Related Repositories
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for project conventions, commit message format, and branch naming rules.
+| Repo | Role |
+|---|---|
+| [mechanics-lambda](https://github.com/Torque-OS/mechanics-lambda) | CPF auth + JWT authorizer — deploy before API Gateway |
+| [mechanics-infra-k8s](https://github.com/Torque-OS/mechanics-infra-k8s) | VPC + EKS + API Gateway Terraform |
+| [mechanics-infra-db](https://github.com/Torque-OS/mechanics-infra-db) | RDS PostgreSQL Terraform |
