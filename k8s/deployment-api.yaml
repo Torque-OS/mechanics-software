@@ -15,10 +15,12 @@ spec:
       labels:
         app: mechanics-software-api
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       automountServiceAccountToken: false
       containers:
         - name: api
-          image: ghcr.io/rnataoliveira/mechanics-software:latest # NOSONAR
+          image: ghcr.io/torque-os/mechanics-software:latest # NOSONAR
           ports:
             - containerPort: 8080
           envFrom:

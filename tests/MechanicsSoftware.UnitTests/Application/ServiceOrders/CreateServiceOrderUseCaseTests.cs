@@ -31,7 +31,7 @@ public class CreateServiceOrderUseCaseTests
         db.Vehicles.Add(BuildVehicle());
         await db.SaveChangesAsync();
 
-        var useCase = new CreateServiceOrderHandler(db);
+        var useCase = new CreateServiceOrderHandler(db, HandlerStubs.Logger<CreateServiceOrderHandler>());
         var result = await useCase.ExecuteAsync(new CreateServiceOrderCommand(CustomerId, VehicleId));
 
         result.Id.Should().NotBeEmpty();
@@ -47,7 +47,7 @@ public class CreateServiceOrderUseCaseTests
         db.Vehicles.Add(BuildVehicle());
         await db.SaveChangesAsync();
 
-        var useCase = new CreateServiceOrderHandler(db);
+        var useCase = new CreateServiceOrderHandler(db, HandlerStubs.Logger<CreateServiceOrderHandler>());
         var act = async () => await useCase.ExecuteAsync(new CreateServiceOrderCommand(CustomerId, VehicleId));
 
         await act.Should().ThrowAsync<NotFoundException>().WithMessage($"*{CustomerId}*");
@@ -60,7 +60,7 @@ public class CreateServiceOrderUseCaseTests
         db.Customers.Add(BuildCustomer());
         await db.SaveChangesAsync();
 
-        var useCase = new CreateServiceOrderHandler(db);
+        var useCase = new CreateServiceOrderHandler(db, HandlerStubs.Logger<CreateServiceOrderHandler>());
         var act = async () => await useCase.ExecuteAsync(new CreateServiceOrderCommand(CustomerId, VehicleId));
 
         await act.Should().ThrowAsync<NotFoundException>().WithMessage($"*{VehicleId}*");

@@ -53,47 +53,14 @@ jobs:
             ${{ steps.image.outputs.name }}:sha-${{ steps.sha.outputs.short }}
             ${{ steps.image.outputs.name }}:latest
 
-  migrate:
-    name: Apply EF Core migrations (Init Container)
+  deploy:
+    name: Apply K8s manifests
     needs: [build-and-push]
     if: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: ubuntu-latest
-    # Migrations are applied by an initContainer in deployment-api.yaml before the API starts.
-    # This job patches the deployment image so the initContainer picks up the correct version.
     permissions:
       contents: read
-
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig for EKS
-        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
-
-      - name: Patch API deployment image
-        run: |
-          kubectl set image deployment/mechanics-software-api \
-            api=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${{ needs.build-and-push.outputs.sha_tag }} \
-            --namespace mechanics-software
-
-      - name: Wait for migration initContainer to complete
-        run: |
-          kubectl rollout status deployment/mechanics-software-api \
-            --namespace mechanics-software \
-            --timeout=180s
-
-  deploy:
-    name: Apply K8s manifests
-    needs: [build-and-push, migrate]
-    if: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+      packages: read
 
     steps:
       - name: Checkout source
@@ -129,10 +96,54 @@ jobs:
             k8s/deployment-api.yaml
 
       - name: Apply all K8s manifests
-        run: kubectl apply -f k8s/
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace mechanics-software \
+            --docker-server ghcr.io \
+            --docker-username "${{ github.actor }}" \
+            --docker-password "${{ secrets.GITHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/secret.yaml
+          kubectl apply -f k8s/deployment-api.yaml
+          kubectl apply -f k8s/service-api.yaml
+          kubectl apply -f k8s/hpa.yaml
 
       - name: Wait for rollout to complete
         run: |
           kubectl rollout status deployment/mechanics-software-api \
             --namespace mechanics-software \
             --timeout=120s
+
+  migrate:
+    name: Apply EF Core migrations (Init Container)
+    needs: [build-and-push, deploy]
+    if: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for EKS
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Patch API deployment image
+        run: |
+          kubectl set image deployment/mechanics-software-api \
+            api=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${{ needs.build-and-push.outputs.sha_tag }} \
+            --namespace mechanics-software
+
+      - name: Wait for migration initContainer to complete
+        run: |
+          kubectl rollout status deployment/mechanics-software-api \
+            --namespace mechanics-software \
+            --timeout=180s

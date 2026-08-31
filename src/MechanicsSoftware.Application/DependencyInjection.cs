@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<GetServiceOrderHandler>();
         services.AddScoped<ListServiceOrdersHandler>();
         services.AddScoped<GetAverageExecutionTimeHandler>();
+        services.AddScoped<GetDailyServiceOrderVolumeHandler>();
 
         return services;
     }

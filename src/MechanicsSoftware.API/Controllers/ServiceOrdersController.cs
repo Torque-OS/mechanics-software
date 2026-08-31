@@ -25,7 +25,8 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     StartExecutionHandler startExecutionHandler,
     CompleteServiceOrderHandler completeHandler,
     DeliverServiceOrderHandler deliverHandler,
-    GetAverageExecutionTimeHandler averageExecutionTimeHandler) : ControllerBase
+    GetAverageExecutionTimeHandler averageExecutionTimeHandler,
+    GetDailyServiceOrderVolumeHandler dailyVolumeHandler) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = Policies.Staff)]
@@ -135,6 +136,16 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     public async Task<IActionResult> AverageExecutionTime(CancellationToken cancellationToken)
     {
         var result = await averageExecutionTimeHandler.ExecuteAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("metrics/daily-volume")]
+    public async Task<IActionResult> DailyVolume(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        CancellationToken cancellationToken)
+    {
+        var result = await dailyVolumeHandler.ExecuteAsync(from, to, cancellationToken);
         return Ok(result);
     }
 }

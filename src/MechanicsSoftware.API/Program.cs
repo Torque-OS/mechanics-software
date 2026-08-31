@@ -5,10 +5,13 @@ using MechanicsSoftware.Infrastructure;
 using MechanicsSoftware.Infrastructure.Logging;
 using MechanicsSoftware.Infrastructure.Persistence;
 using MechanicsSoftware.Infrastructure.Persistence.SQL;
+using MechanicsSoftware.API.Metrics;
+using MechanicsSoftware.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics.CodeAnalysis;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +20,8 @@ builder.Services.AddSwaggerDocumentation();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSingleton<IServiceOrderMetrics, PrometheusServiceOrderMetrics>();
+builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
 builder.Services.AddControllers(options =>
 {
@@ -32,6 +37,8 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 app.UseMiddleware<GatewayKeyMiddleware>();
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseHttpMetrics();
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>
@@ -57,6 +64,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapMetrics().AllowAnonymous();
 app.MapControllers();
 
 app.Lifetime.ApplicationStarted.Register(() =>
