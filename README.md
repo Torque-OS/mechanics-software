@@ -449,6 +449,7 @@ dotnet test tests/MechanicsSoftware.IntegrationTests
 | ADR-005 Clean Architecture Migration | [`docs/decisions/ADR-005-clean-architecture-migration.md`](./docs/decisions/ADR-005-clean-architecture-migration.md) |
 | ADR-006 Database Migration Strategy | [`docs/decisions/ADR-006-database-migration-strategy.md`](./docs/decisions/ADR-006-database-migration-strategy.md) |
 | Database Justification + ER Diagram | [`docs/database/database-justification.md`](./docs/database/database-justification.md) |
+| Component Diagram — Fase 3 Cloud | [`docs/architecture/component-diagram-fase3.md`](./docs/architecture/component-diagram-fase3.md) |
 
 ---
 
