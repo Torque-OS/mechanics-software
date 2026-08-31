@@ -428,6 +428,8 @@ docs/
 | ADR-005 Clean Architecture Migration | [`docs/decisions/ADR-005-clean-architecture-migration.md`](./docs/decisions/ADR-005-clean-architecture-migration.md) |
 | Database Justification + ER Diagram | [`docs/database/database-justification.md`](./docs/database/database-justification.md) |
 | Component Diagram — Fase 3 Cloud | [`docs/architecture/component-diagram-fase3.md`](./docs/architecture/component-diagram-fase3.md) |
+| Sequence — CPF Authentication | [`docs/architecture/sequence-cpf-auth.md`](./docs/architecture/sequence-cpf-auth.md) |
+| Sequence — Service Order Opening | [`docs/architecture/sequence-service-order-opening.md`](./docs/architecture/sequence-service-order-opening.md) |
 | Postman Collection | [`MechanicsSoftware.postman_collection.json`](./MechanicsSoftware.postman_collection.json) |
 
 ---
