@@ -8,3 +8,14 @@ metadata:
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:8080" # nosonar — TLS terminated at ingress; plain HTTP is correct for intra-cluster traffic
+  DD_SERVICE: "mechanics-software-api"
+  DD_ENV: "prod"
+  DD_VERSION: "latest"
+  DD_LOGS_ENABLED: "true"
+  DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+  DD_APM_ENABLED: "true"
+  DD_RUNTIME_METRICS_ENABLED: "true"
+  DD_TRACE_SAMPLE_RATE: "1"
+  OTEL_SERVICE_NAME: "mechanics-software-api"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://datadog-agent:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"

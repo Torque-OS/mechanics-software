@@ -12,8 +12,39 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics.CodeAnalysis;
 using Prometheus;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(
+            serviceName: builder.Configuration["DD_SERVICE"] ?? builder.Environment.ApplicationName,
+            serviceVersion: builder.Configuration["DD_VERSION"] ?? "unknown"))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = true;
+                options.Filter = httpContext =>
+                    !httpContext.Request.Path.StartsWithSegments("/health");
+            })
+            .AddHttpClientInstrumentation(options =>
+            {
+                options.RecordException = true;
+            });
+
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+            });
+        }
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerDocumentation();
@@ -38,6 +69,7 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<GatewayKeyMiddleware>();
 app.UseHttpMetrics();
 
