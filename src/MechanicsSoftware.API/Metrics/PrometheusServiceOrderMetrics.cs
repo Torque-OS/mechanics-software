@@ -37,6 +37,18 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
                 LabelNames = new[] { "status" }
             });
 
+    private static readonly Gauge ServiceOrderTotalsByStatus = global::Prometheus.Metrics
+        .CreateGauge(
+            "mechanics_service_orders_current_by_status",
+            "Current number of service orders by status.",
+            new GaugeConfiguration { LabelNames = new[] { "status" } });
+
+    private static readonly Gauge AverageExecutionDurationByStatus = global::Prometheus.Metrics
+        .CreateGauge(
+            "mechanics_service_orders_average_execution_duration_hours_by_status",
+            "Average execution duration in hours by status.",
+            new GaugeConfiguration { LabelNames = new[] { "status" } });
+
     private static readonly Counter HttpErrors = global::Prometheus.Metrics
         .CreateCounter(
             "mechanics_http_errors_total",
@@ -85,6 +97,24 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
             return;
 
         ExecutionDurationByStatus.WithLabels(normalized).Observe(durationHours);
+    }
+
+    public void SetOrderTotalByStatus(string status, long count)
+    {
+        var normalized = status.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return;
+
+        ServiceOrderTotalsByStatus.WithLabels(normalized).Set(count);
+    }
+
+    public void SetAverageExecutionDurationByStatus(string status, double averageDurationHours)
+    {
+        var normalized = status.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return;
+
+        AverageExecutionDurationByStatus.WithLabels(normalized).Set(averageDurationHours);
     }
 
     public void RecordHttpError(string method, string path, int statusCode)
