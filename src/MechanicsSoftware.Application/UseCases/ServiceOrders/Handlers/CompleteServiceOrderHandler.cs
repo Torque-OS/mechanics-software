@@ -38,6 +38,12 @@ public sealed class CompleteServiceOrderHandler(
             order.Id,
             order.CompletedAt);
         metrics?.OrderCompleted();
+        metrics?.OrderStatusChanged(order.Status.ToString());
+
+        var averageHours = order.CompletedAt.HasValue && order.CreatedAt != default
+            ? (order.CompletedAt.Value - order.CreatedAt).TotalHours
+            : 0;
+        metrics?.SetAverageExecutionTimeByStatus(order.Status.ToString(), averageHours);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 
