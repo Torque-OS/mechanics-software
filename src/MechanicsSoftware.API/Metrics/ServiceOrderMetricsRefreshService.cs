@@ -29,7 +29,7 @@ public sealed class ServiceOrderMetricsRefreshService(
 
             var orders = await db.ServiceOrders
                 .Where(order => order.CompletedAt != null || order.CreatedAt != default)
-                .Select(order => new { order.CreatedAt, order.CompletedAt })
+                .Select(order => new { order.CreatedAt, order.CompletedAt, order.Status })
                 .ToListAsync(cancellationToken);
 
             var completedOrders = orders
@@ -44,6 +44,23 @@ public sealed class ServiceOrderMetricsRefreshService(
             metrics.SetAverageExecutionTime(
                 Math.Round(averageHours, 2),
                 completedOrders.Count);
+
+            var ordersByStatus = orders.GroupBy(o => o.Status.ToString());
+            foreach (var statusGroup in ordersByStatus)
+            {
+                metrics.OrderStatusChanged(statusGroup.Key);
+                
+                var completedInStatus = statusGroup
+                    .Where(o => o.CompletedAt != null)
+                    .ToList();
+                
+                if (completedInStatus.Count > 0)
+                {
+                    var avgDurationHours = completedInStatus.Average(o =>
+                        (o.CompletedAt!.Value - o.CreatedAt).TotalHours);
+                    metrics.ObserveExecutionDurationByStatus(statusGroup.Key, avgDurationHours);
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
