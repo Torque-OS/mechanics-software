@@ -48,18 +48,16 @@ public sealed class ServiceOrderMetricsRefreshService(
             var ordersByStatus = orders.GroupBy(o => o.Status.ToString());
             foreach (var statusGroup in ordersByStatus)
             {
-                metrics.OrderStatusChanged(statusGroup.Key);
+                metrics.SetOrderTotalByStatus(statusGroup.Key, statusGroup.LongCount());
                 
                 var completedInStatus = statusGroup
                     .Where(o => o.CompletedAt != null)
                     .ToList();
                 
-                if (completedInStatus.Count > 0)
-                {
-                    var avgDurationHours = completedInStatus.Average(o =>
-                        (o.CompletedAt!.Value - o.CreatedAt).TotalHours);
-                    metrics.ObserveExecutionDurationByStatus(statusGroup.Key, avgDurationHours);
-                }
+                var avgDurationHours = completedInStatus.Count == 0
+                    ? 0
+                    : completedInStatus.Average(o => (o.CompletedAt!.Value - o.CreatedAt).TotalHours);
+                metrics.SetAverageExecutionDurationByStatus(statusGroup.Key, avgDurationHours);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
