@@ -27,10 +27,10 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
             "Number of service orders by status.",
             new CounterConfiguration { LabelNames = new[] { "status" } });
 
-    private static readonly Histogram AverageExecutionTimeByStatus = global::Prometheus.Metrics
+    private static readonly Histogram ExecutionDurationByStatus = global::Prometheus.Metrics
         .CreateHistogram(
-            "mechanics_service_orders_average_execution_hours_by_status",
-            "Average execution time in hours by status.",
+            "mechanics_service_orders_execution_duration_hours_by_status",
+            "Execution duration in hours by status.",
             new HistogramConfiguration
             {
                 Buckets = new[] { 0.25, 0.5, 1, 2, 4, 8, 12, 24, 48, 72 },
@@ -49,7 +49,7 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
             "HTTP request duration in milliseconds.",
             new HistogramConfiguration
             {
-                Buckets = new[] { 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000 },
+                Buckets = new[] { 10d, 25d, 50d, 100d, 250d, 500d, 1000d, 2500d, 5000d, 10000d },
                 LabelNames = new[] { "method", "path", "status_code" }
             });
 
@@ -78,12 +78,13 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
         ExecutionTimeOrderCount.Set(orderCount);
     }
 
-    public void SetAverageExecutionTimeByStatus(string status, double averageHours)
+    public void ObserveExecutionDurationByStatus(string status, double durationHours)
     {
-        if (string.IsNullOrWhiteSpace(status))
+        var normalized = status.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
             return;
 
-        AverageExecutionTimeByStatus.WithLabels(status).Observe(averageHours);
+        ExecutionDurationByStatus.WithLabels(normalized).Observe(durationHours);
     }
 
     public void RecordHttpError(string method, string path, int statusCode)

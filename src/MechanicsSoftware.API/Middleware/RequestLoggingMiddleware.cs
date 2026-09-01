@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MechanicsSoftware.Application.Abstractions;
+using Microsoft.AspNetCore.Routing;
 
 namespace MechanicsSoftware.API.Middleware;
 
@@ -27,16 +28,15 @@ public sealed class RequestLoggingMiddleware(
             var path = context.Request.Path.Value ?? "/";
             var method = context.Request.Method;
             var statusCode = context.Response.StatusCode;
+            var safePath = SanitizeForLog(path);
+            var safeMethod = SanitizeForLog(method);
             
-            var routeData = context.GetRouteData();
-            var pathTemplate = routeData?.Values["controller"] is string controller
-                ? $"/{controller}"
-                : path;
+            var pathTemplate = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText ?? path;
 
             _logger.LogInformation(
                 "HTTP request completed: method={Method} path={Path} statusCode={StatusCode} durationMs={DurationMs}",
-                method,
-                path,
+                safeMethod,
+                safePath,
                 statusCode,
                 durationMs);
 
@@ -46,8 +46,8 @@ public sealed class RequestLoggingMiddleware(
             {
                 _logger.LogError(
                     "HTTP request failed: method={Method} path={Path} statusCode={StatusCode} durationMs={DurationMs}",
-                    method,
-                    path,
+                    safeMethod,
+                    safePath,
                     statusCode,
                     durationMs);
 
@@ -55,4 +55,8 @@ public sealed class RequestLoggingMiddleware(
             }
         }
     }
+
+    private static string SanitizeForLog(string value) =>
+        value.Replace("\r", "\\r", StringComparison.Ordinal)
+             .Replace("\n", "\\n", StringComparison.Ordinal);
 }

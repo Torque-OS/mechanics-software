@@ -12,7 +12,7 @@ public interface IServiceOrderMetrics
 
     void SetAverageExecutionTime(double averageHours, int orderCount);
 
-    void SetAverageExecutionTimeByStatus(string status, double averageHours);
+    void ObserveExecutionDurationByStatus(string status, double durationHours);
 
     void RecordHttpError(string method, string path, int statusCode);
 
