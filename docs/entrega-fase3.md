@@ -43,16 +43,28 @@ Toda a documentação está versionada no repositório `mechanics-software`, em 
 
 ### 3.1 Diagrama de Componentes
 
-Visão cloud completa da Fase 3 — AWS, APIs, banco e monitoramento (Datadog):
+Visão cloud completa da Fase 3 — AWS, APIs, banco e monitoramento (Datadog).
 
-https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/component-diagram-fase3.md
+![Diagrama de Componentes — Fase 3](./images/component.png)
+
+> Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/component-diagram-fase3.md
 
 ### 3.2 Diagramas de Sequência
 
-| Fluxo | Link |
-|---|---|
-| Autenticação via CPF (token issuance + authorized request) | https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-cpf-auth.md |
-| Abertura de Ordem de Serviço | https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-service-order-opening.md |
+#### Autenticação via CPF — Parte 1: Emissão de token (`POST /auth`)
+
+![Sequência — CPF Auth Parte 1](./images/seq-auth-1.png)
+
+#### Autenticação via CPF — Parte 2: Requisição autenticada (Lambda Authorizer)
+
+![Sequência — CPF Auth Parte 2](./images/seq-auth-2.png)
+
+#### Abertura de Ordem de Serviço
+
+![Sequência — Abertura de OS](./images/seq-service-order.png)
+
+> Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-cpf-auth.md  
+> Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-service-order-opening.md
 
 ### 3.3 RFC — Request for Comments
 
@@ -70,9 +82,11 @@ https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/comp
 
 ### 3.5 Justificativa do Banco de Dados + Diagrama ER
 
-Justificativa formal da escolha do PostgreSQL 16 (RDS vs K8s-hosted), diagrama ER completo com todos os 10 relacionamentos, decisões de modelagem (valores monetários em centavos, snapshots de preço, flag `active` em customers):
+Justificativa formal da escolha do PostgreSQL 16 (RDS vs K8s-hosted), diagrama ER completo com todos os 10 relacionamentos, decisões de modelagem (valores monetários em centavos, snapshots de preço, flag `active` em customers).
 
-https://github.com/Torque-OS/mechanics-software/blob/main/docs/database/database-justification.md
+![Diagrama ER](./images/er.png)
+
+> Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/database/database-justification.md
 
 ---
 
