@@ -6,8 +6,6 @@ public interface IServiceOrderMetrics
 
     void OrderCompleted();
 
-    void OrderStatusChanged(string status);
-
     void SetOrderTotals(long opened, long completed);
 
     void SetAverageExecutionTime(double averageHours, int orderCount);
@@ -17,6 +15,8 @@ public interface IServiceOrderMetrics
     void SetOrderTotalByStatus(string status, long count);
 
     void SetAverageExecutionDurationByStatus(string status, double averageDurationHours);
+
+    void SetDailyOrderTotals(long opened, long completed);
 
     void RecordHttpError(string method, string path, int statusCode);
 

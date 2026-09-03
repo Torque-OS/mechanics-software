@@ -17,5 +17,3 @@ data:
   DD_RUNTIME_METRICS_ENABLED: "true"
   DD_TRACE_SAMPLE_RATE: "1"
   OTEL_SERVICE_NAME: "mechanics-software-api"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://datadog-agent:4318"
-  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"

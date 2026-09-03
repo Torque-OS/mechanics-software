@@ -18,8 +18,6 @@ public sealed class StartExecutionHandler(
 
         await db.SaveChangesAsync(cancellationToken);
 
-        metrics?.OrderStatusChanged(order.Status.ToString());
-
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 
         return ServiceOrderResponse.From(order);

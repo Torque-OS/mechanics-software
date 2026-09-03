@@ -31,7 +31,6 @@ public sealed class CreateServiceOrderHandler(
             order.Id,
             order.CreatedAt);
         metrics?.OrderOpened();
-        metrics?.OrderStatusChanged(order.Status.ToString());
 
         return ServiceOrderResponse.From(order);
     }
