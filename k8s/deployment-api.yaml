@@ -33,6 +33,15 @@ spec:
                 name: mechanics-config
             - secretRef:
                 name: mechanics-secrets
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://$(HOST_IP):4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
           resources:
             requests:
               cpu: 250m
