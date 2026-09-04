@@ -1,5 +1,5 @@
 # Tech Challenge — Fase 3
-## FIAP POS Tech · 15SOAT · Turma 2025
+## FIAP POS Tech · 15SOAT · Turma 2026
 
 **Grupo:**
 | Nome | RM |
