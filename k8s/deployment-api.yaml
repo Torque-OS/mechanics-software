@@ -16,7 +16,7 @@ spec:
         app: mechanics-software-api
       annotations:
         ad.datadoghq.com/api.checks: >-
-          {"openmetrics":{"init_config":{},"instances":[{"openmetrics_endpoint":"http://%%host%%:8080/metrics","namespace":"mechanics","metrics":["mechanics_service_orders_opened_total","mechanics_service_orders_completed_total","mechanics_service_orders_average_execution_time_hours","mechanics_service_orders_execution_time_order_count","mechanics_service_orders_by_status_total","mechanics_service_orders_execution_duration_hours_by_status.*","mechanics_service_orders_current_by_status.*","mechanics_service_orders_average_execution_duration_hours_by_status.*","mechanics_http_errors_total","mechanics_http_request_duration_ms.*"]}]}}
+          {"openmetrics":{"init_config":{},"instances":[{"openmetrics_endpoint":"http://%%host%%:8080/metrics","namespace":"mechanics","metrics":["mechanics_service_orders_opened_total","mechanics_service_orders_completed_total","mechanics_service_orders_opened_today","mechanics_service_orders_completed_today","mechanics_service_orders_average_execution_time_hours","mechanics_service_orders_execution_time_order_count","mechanics_service_orders_execution_duration_hours_by_status.*","mechanics_service_orders_current_by_status.*","mechanics_service_orders_average_execution_duration_hours_by_status.*","mechanics_http_errors_total","mechanics_http_request_duration_ms.*"]}]}}
         ad.datadoghq.com/api.logs: >-
           [{"source":"dotnet","service":"mechanics-software-api"}]
     spec:
@@ -33,6 +33,15 @@ spec:
                 name: mechanics-config
             - secretRef:
                 name: mechanics-secrets
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://$(HOST_IP):4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
           resources:
             requests:
               cpu: 250m

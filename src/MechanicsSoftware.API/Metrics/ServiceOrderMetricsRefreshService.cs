@@ -1,4 +1,5 @@
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,8 +29,22 @@ public sealed class ServiceOrderMetricsRefreshService(
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             var orders = await db.ServiceOrders
-                .Where(order => order.CompletedAt != null || order.CreatedAt != default)
-                .Select(order => new { order.CreatedAt, order.CompletedAt, order.Status })
+                .Select(order => new
+                {
+                    order.CreatedAt,
+                    order.CompletedAt,
+                    order.Status,
+                })
+                .ToListAsync(cancellationToken);
+
+            var statusHistory = await db.ServiceOrderStatusHistory
+                .Select(history => new
+                {
+
+                    history.ServiceOrderId,
+                    history.Status,
+                    history.EnteredAt
+                })
                 .ToListAsync(cancellationToken);
 
             var completedOrders = orders
@@ -45,19 +60,39 @@ public sealed class ServiceOrderMetricsRefreshService(
                 Math.Round(averageHours, 2),
                 completedOrders.Count);
 
-            var ordersByStatus = orders.GroupBy(o => o.Status.ToString());
-            foreach (var statusGroup in ordersByStatus)
+            var today = DateTime.UtcNow.Date;
+            metrics.SetDailyOrderTotals(
+                orders.LongCount(order => order.CreatedAt >= today),
+                orders.LongCount(order => order.CompletedAt >= today));
+
+            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
+            foreach (var status in statuses)
             {
-                metrics.SetOrderTotalByStatus(statusGroup.Key, statusGroup.LongCount());
-                
-                var completedInStatus = statusGroup
-                    .Where(o => o.CompletedAt != null)
+                metrics.SetOrderTotalByStatus(
+                    status,
+                    orders.LongCount(order => order.Status.ToString() == status));
+            }
+
+            foreach (var status in statuses)
+            {
+                var periods = statusHistory
+                    .GroupBy(history => history.ServiceOrderId)
+                    .SelectMany(historyGroup => historyGroup
+                        .OrderBy(history => history.EnteredAt)
+                        .Select((history, index) => new
+                        {
+                            history.Status,
+                            Duration = ((index + 1 < historyGroup.Count()
+                                ? historyGroup.OrderBy(item => item.EnteredAt).ElementAt(index + 1).EnteredAt
+                                : DateTime.UtcNow) - history.EnteredAt).TotalHours
+                        }))
+                    .Where(history => new ServiceOrderStatus(history.Status).ToString() == status)
+                    .Select(history => history.Duration)
                     .ToList();
-                
-                var avgDurationHours = completedInStatus.Count == 0
-                    ? 0
-                    : completedInStatus.Average(o => (o.CompletedAt!.Value - o.CreatedAt).TotalHours);
-                metrics.SetAverageExecutionDurationByStatus(statusGroup.Key, avgDurationHours);
+
+                metrics.SetAverageExecutionDurationByStatus(
+                    status,
+                    periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

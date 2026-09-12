@@ -21,11 +21,13 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
         "mechanics_service_orders_execution_time_order_count",
         "Number of completed service orders used to calculate average execution time.");
 
-    private static readonly Counter ServiceOrdersByStatus = global::Prometheus.Metrics
-        .CreateCounter(
-            "mechanics_service_orders_by_status_total",
-            "Number of service orders by status.",
-            new CounterConfiguration { LabelNames = new[] { "status" } });
+    private static readonly Gauge OpenedToday = global::Prometheus.Metrics.CreateGauge(
+        "mechanics_service_orders_opened_today",
+        "Number of service orders opened today.");
+
+    private static readonly Gauge CompletedToday = global::Prometheus.Metrics.CreateGauge(
+        "mechanics_service_orders_completed_today",
+        "Number of service orders completed today.");
 
     private static readonly Histogram ExecutionDurationByStatus = global::Prometheus.Metrics
         .CreateHistogram(
@@ -65,17 +67,14 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
                 LabelNames = new[] { "method", "path", "status_code" }
             });
 
-    public void OrderOpened() => Opened.Inc();
-
-    public void OrderCompleted() => Completed.Inc();
-
-    public void OrderStatusChanged(string status)
+    public void OrderOpened()
     {
-        var normalized = status.Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
-            return;
+        Opened.Inc();
+    }
 
-        ServiceOrdersByStatus.WithLabels(normalized).Inc();
+    public void OrderCompleted()
+    {
+        Completed.Inc();
     }
 
     public void SetOrderTotals(long opened, long completed)
@@ -115,6 +114,12 @@ public sealed class PrometheusServiceOrderMetrics : IServiceOrderMetrics
             return;
 
         AverageExecutionDurationByStatus.WithLabels(normalized).Set(averageDurationHours);
+    }
+
+    public void SetDailyOrderTotals(long opened, long completed)
+    {
+        OpenedToday.Set(opened);
+        CompletedToday.Set(completed);
     }
 
     public void RecordHttpError(string method, string path, int statusCode)

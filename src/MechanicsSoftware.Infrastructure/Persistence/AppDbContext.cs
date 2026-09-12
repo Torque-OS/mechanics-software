@@ -19,6 +19,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<Part> Parts { get; set; } = null!;
     public DbSet<Service> Services { get; set; } = null!;
     public DbSet<ServiceOrder> ServiceOrders { get; set; } = null!;
+    public DbSet<ServiceOrderStatusHistory> ServiceOrderStatusHistory { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ChangeTracker.DetectChanges();
+        RecordServiceOrderStatusChanges();
         PromoteNewOwnedCollectionItems();
         await PromoteNewOwnedScalarsAsync(cancellationToken);
 
@@ -46,6 +48,35 @@ public sealed class AppDbContext : DbContext, IAppDbContext
             ChangeTracker.AutoDetectChangesEnabled = auto;
         }
     }
+
+    private void RecordServiceOrderStatusChanges()
+    {
+        foreach (var entry in ChangeTracker.Entries<ServiceOrder>().ToList())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                AddStatusHistory(entry.Entity, entry.Entity.Status.Value, entry.Entity.CreatedAt);
+                continue;
+            }
+
+            if (entry.State != EntityState.Modified)
+                continue;
+
+            var originalStatus = entry.Property(order => order.Status).OriginalValue;
+            if (originalStatus.Value != entry.Entity.Status.Value)
+                AddStatusHistory(entry.Entity, entry.Entity.Status.Value, DateTime.UtcNow);
+        }
+    }
+
+    private void AddStatusHistory(
+        ServiceOrder order,
+        ServiceOrderStatus.Status status,
+        DateTime enteredAt) =>
+        Set<ServiceOrderStatusHistory>().Add(
+            MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory.Create(
+                order.Id,
+                status,
+                enteredAt));
 
     // Owned-collection items in this domain are append-only (ServiceItems, PartItems,
     // StockMovements). Any Modified entry is therefore a freshly-added item. No DB round-trip.
