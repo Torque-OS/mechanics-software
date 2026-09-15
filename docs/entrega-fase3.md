@@ -51,6 +51,8 @@ Visão cloud completa da Fase 3 — AWS, APIs, banco e monitoramento (Datadog).
 
 ### 3.2 Diagramas de Sequência
 
+> O fluxo de autenticação com CPF (login) também está documentado no [Miro board](https://miro.com/app/board/uXjVGyCZXBU=/).
+
 #### Autenticação via CPF — Parte 1: Emissão de token (`POST /auth`)
 
 ![Sequência — CPF Auth Parte 1](./images/seq-auth-1.png)
