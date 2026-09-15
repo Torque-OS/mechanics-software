@@ -25,7 +25,7 @@
 
 ## 2. Vídeo de Demonstração
 
-> **Link:** _(a ser preenchido após gravação — F3-34)_
+> **Link:** https://www.youtube.com/watch?v=zPK0fWsFlBM
 
 O vídeo demonstra:
 - Autenticação com CPF via Lambda
@@ -96,7 +96,7 @@ Justificativa formal da escolha do PostgreSQL 16 (RDS vs K8s-hosted), diagrama E
 
 | Item | Link / Detalhes |
 |---|---|
-| **Dashboard público Datadog** | https://p.datadoghq.com/sb/e9eb9cda-9e7e-11f1-b0cf-de421ab27ba0-357d7f8569bef16ef90ad5ddd32dbd9c |
+| **Dashboard público Datadog** | https://p.datadoghq.com/sb/67a679df-abd9-11f1-872f-e6d5bf46621c-3cb89ab5d5a932e0775fc52d8a538201 |
 | Agente no K8s | DaemonSet via Helm (`mechanics-infra-k8s`) |
 | Métricas expostas | `/metrics` (Prometheus) — volume diário de OS, tempo médio por status, erros |
 | Logs estruturados | JSON com `correlationId` em todas as requisições (`RequestLoggingMiddleware`) |
