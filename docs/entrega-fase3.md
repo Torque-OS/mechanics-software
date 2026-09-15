@@ -66,13 +66,19 @@ Visão cloud completa da Fase 3 — AWS, APIs, banco e monitoramento (Datadog).
 > Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-cpf-auth.md  
 > Documento completo: https://github.com/Torque-OS/mechanics-software/blob/main/docs/architecture/sequence-service-order-opening.md
 
-### 3.3 RFC — Request for Comments
+### 3.3 Miro — DDD, Event Storming e Domain Storytelling
+
+Diagramas de modelagem do domínio: Event Storming, Domain Storytelling, Bounded Contexts, Aggregates e fluxo de estados da Ordem de Serviço.
+
+> **Board:** https://miro.com/app/board/uXjVGyCZXBU=/
+
+### 3.4 RFC — Request for Comments
 
 | Documento | Decisões técnicas cobertas |
 |---|---|
 | [RFC-001 — Fase 3: Cloud, banco e autenticação](https://github.com/Torque-OS/mechanics-software/blob/main/docs/rfc/RFC-001-fase3-cloud-db-auth.md) | Escolha da AWS, RDS vs K8s-hosted PostgreSQL, cadeia de autenticação CPF (Lambda → API GW → EKS + GatewayKey) |
 
-### 3.4 ADRs — Architecture Decision Records
+### 3.5 ADRs — Architecture Decision Records
 
 | ADR | Decisão |
 |---|---|
@@ -80,7 +86,7 @@ Visão cloud completa da Fase 3 — AWS, APIs, banco e monitoramento (Datadog).
 | [ADR-008 — Lambda Authorizer](https://github.com/Torque-OS/mechanics-software/blob/main/docs/decisions/ADR-008-lambda-authorizer.md) | REQUEST type, `isAuthorized` simples, cache TTL 300 s, alternativas descartadas |
 | [ADR-009 — HPA Autoscaling](https://github.com/Torque-OS/mechanics-software/blob/main/docs/decisions/ADR-009-hpa-autoscaling.md) | CPU-based, min 2 / max 10 réplicas, averageUtilization 70%, VPA vs KEDA |
 
-### 3.5 Justificativa do Banco de Dados + Diagrama ER
+### 3.6 Justificativa do Banco de Dados + Diagrama ER
 
 Justificativa formal da escolha do PostgreSQL 16 (RDS vs K8s-hosted), diagrama ER completo com todos os 10 relacionamentos, decisões de modelagem (valores monetários em centavos, snapshots de preço, flag `active` em customers).
 
