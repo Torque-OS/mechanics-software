@@ -39,12 +39,13 @@ Internet
 
 ## What This Repo Does
 
-A RESTful API that manages the full lifecycle of service orders for an auto repair shop:
+A RESTful API implementing the **OS Service** of the Fase 4 microservices split (see
+[ADR-010](./docs/decisions/ADR-010-microservices-split.md)):
 
 - **Customers & Vehicles** — CRUD with Brazilian document types (CPF/CNPJ).
 - **Parts & Services Catalogue** — inventory with stock tracking.
-- **Service Orders** — full lifecycle: RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED → DELIVERED (or CANCELLED).
-- **Budget** — generated per service order, approved or rejected by the customer.
+- **Service Orders** — lifecycle: RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXECUTION → COMPLETED → DELIVERED (or CANCELLED). The last four transitions are driven by Saga events from the Billing and Execution services (ADR-011), not by this repo's own endpoints — see [`docs/architecture/architecture-fase4.md`](./docs/architecture/architecture-fase4.md).
+- **Budget** — generated and decided by the [Billing Service](https://github.com/Torque-OS/mechanics-billing-service) (ADR-010); this repo keeps only a `BudgetId`/`BudgetTotal` reference.
 - **Email notifications** — every status transition sends an email to the customer via SMTP.
 - **Staff authentication** — email + password login at `POST /api/auth/login`; customers authenticate by CPF via `mechanics-lambda`.
 - **Gateway Key** — validates that requests arrived through the API Gateway (defence in depth).
@@ -195,22 +196,26 @@ Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 ### Service Order Lifecycle
 
 ```
-RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → COMPLETED → DELIVERED
-                                   ↓
-                               CANCELLED
+RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXECUTION → COMPLETED → DELIVERED
+                                   ↓                    ↓               ↓
+                               CANCELLED ←───────────────┴───────────────┘
 ```
 
-| Step | Endpoint |
+| Step | Trigger |
 |---|---|
 | Start diagnosis | `POST /api/service-orders/{id}/start-diagnosis` |
 | Add service item | `POST /api/service-orders/{id}/services` |
 | Add part item | `POST /api/service-orders/{id}/parts` |
-| Generate budget | `POST /api/service-orders/{id}/budget` |
-| Send budget | `POST /api/service-orders/{id}/send-budget` |
-| Approve/reject | `POST /api/service-orders/{id}/budget-decision` with `{ "decision": "approve" \| "reject" }` |
+| Budget generated / approved | `BudgetGenerated` / `BudgetApproved` Saga event from the Billing Service (ADR-011) |
+| Payment confirmed | `PaymentConfirmed` Saga event from the Billing Service |
 | Start execution | `POST /api/service-orders/{id}/start-execution` |
 | Complete | `POST /api/service-orders/{id}/complete` |
 | Deliver | `POST /api/service-orders/{id}/deliver` |
+| Cancel (compensation) | `BudgetRejected` / `PaymentFailed` / `ExecutionFailed` Saga event |
+
+The Saga events are not yet wired to a message broker (broker provisioning is F4-08, the
+MassTransit consumers are F4-13); until then, `Handlers/SagaEvents/` holds the OS-side domain
+logic ready to be invoked by those consumers.
 
 Full schemas available at `/swagger`.
 

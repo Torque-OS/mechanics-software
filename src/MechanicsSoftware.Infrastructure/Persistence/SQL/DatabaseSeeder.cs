@@ -51,7 +51,6 @@ public sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher hasher)
                 stock_movements,
                 part_items,
                 service_items,
-                budgets,
                 service_orders,
                 vehicles,
                 customers,

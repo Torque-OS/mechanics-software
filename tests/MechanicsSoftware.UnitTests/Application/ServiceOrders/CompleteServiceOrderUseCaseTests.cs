@@ -21,9 +21,9 @@ public class CompleteServiceOrderUseCaseTests
         var order = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         order.StartDiagnosis();
         order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        order.GenerateBudget();
-        order.SendBudget();
-        order.Approve();
+        order.AttachBudget(Guid.NewGuid(), new Money(5000));
+        order.ConfirmBudgetApproval();
+        order.ConfirmPayment();
         return order;
     }
 
@@ -52,9 +52,9 @@ public class CompleteServiceOrderUseCaseTests
         order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
         part.Reserve(2, order.Id);
         order.AddPartItem(part.Id, part.Name, part.UnitPrice, 2, PartAvailability.Available);
-        order.GenerateBudget();
-        order.SendBudget();
-        order.Approve();
+        order.AttachBudget(Guid.NewGuid(), new Money(5000));
+        order.ConfirmBudgetApproval();
+        order.ConfirmPayment();
 
         var mockOrders = MockDbSetHelper.CreateMockDbSet([order]);
         var mockParts = MockDbSetHelper.CreateMockDbSet([part]);

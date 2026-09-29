@@ -19,9 +19,6 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     StartDiagnosisHandler startDiagnosisHandler,
     AddServiceItemHandler addServiceItemHandler,
     AddPartItemHandler addPartItemHandler,
-    GenerateBudgetHandler generateBudgetHandler,
-    SendBudgetHandler sendBudgetHandler,
-    BudgetDecisionHandler budgetDecisionHandler,
     StartExecutionHandler startExecutionHandler,
     CompleteServiceOrderHandler completeHandler,
     DeliverServiceOrderHandler deliverHandler,
@@ -83,29 +80,9 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
         return Ok(result);
     }
 
-    [HttpPost("{id:guid}/budget")]
-    [Authorize(Policy = Policies.Staff)]
-    public async Task<IActionResult> GenerateBudget(Guid id, CancellationToken cancellationToken)
-    {
-        var result = await generateBudgetHandler.ExecuteAsync(id, cancellationToken);
-        return Ok(result);
-    }
-
-    [HttpPost("{id:guid}/send-budget")]
-    [Authorize(Policy = Policies.Staff)]
-    public async Task<IActionResult> SendBudget(Guid id, CancellationToken cancellationToken)
-    {
-        var result = await sendBudgetHandler.ExecuteAsync(id, cancellationToken);
-        return Ok(result);
-    }
-
-    [HttpPost("{id:guid}/budget-decision")]
-    public async Task<IActionResult> HandleBudgetDecision(Guid id, BudgetDecisionRequest request, CancellationToken cancellationToken)
-    {
-        var approve = request.Decision == BudgetDecision.Approve;
-        var result = await budgetDecisionHandler.ExecuteAsync(id, approve, cancellationToken);
-        return Ok(result);
-    }
+    // Budget generation, sending and approval/rejection moved to the Billing Service (ADR-010).
+    // The OS Service now reacts to BudgetGenerated/BudgetApproved/BudgetRejected saga events
+    // instead of exposing these as its own endpoints — see Handlers/SagaEvents and F4-13.
 
     [HttpPost("{id:guid}/start-execution")]
     [Authorize(Policy = Policies.Staff)]
