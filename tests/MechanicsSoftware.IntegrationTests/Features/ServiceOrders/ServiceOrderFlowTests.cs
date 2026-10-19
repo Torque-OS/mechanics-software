@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
+using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 using MechanicsSoftware.IntegrationTests.Base;
 using MechanicsSoftware.IntegrationTests.Fixtures;
 using MechanicsSoftware.Infrastructure.Persistence;
@@ -18,6 +19,11 @@ using MechanicsSoftware.Domain.Enums;
 
 namespace MechanicsSoftware.IntegrationTests.Features.ServiceOrders;
 
+// Budget generation, sending and approval/rejection are now owned by the Billing Service
+// (ADR-010) and reach the OS Service as saga events (ADR-011). Until the broker and MassTransit
+// consumers are wired (F4-08, F4-13), these tests simulate the events by invoking the same
+// saga-event handlers a consumer will call, via the app's own DI container — everything else
+// still goes through real HTTP calls against the running API.
 [Collection("IntegrationTests")]
 public sealed class ServiceOrderFlowTests : IntegrationTestBase
 {
@@ -75,14 +81,14 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         await AssertMovementExistsAsync(partId, StockMovementType.Reservation,
             PartItemQuantity, reference: orderId);
 
-        var budget = await GenerateBudgetAsync(client, orderId);
-        budget.TotalInCents.Should().Be(ExpectedBudgetTotalInCents);
-        budget.Status.Should().Be("PENDING");
+        var afterBudget = await SimulateBudgetGeneratedAsync(orderId, ExpectedBudgetTotalInCents);
+        afterBudget.BudgetTotalInCents.Should().Be(ExpectedBudgetTotalInCents);
+        afterBudget.Status.Should().Be("AWAITING_APPROVAL");
 
-        await SendBudgetAsync(client, orderId);
-        await AssertOrderStatusAsync(client, orderId, "AWAITING_APPROVAL");
+        await SimulateBudgetApprovedAsync(orderId);
+        await AssertOrderStatusAsync(client, orderId, "AWAITING_PAYMENT");
 
-        await ApproveAsync(client, orderId);
+        await SimulatePaymentConfirmedAsync(orderId);
         await AssertOrderStatusAsync(client, orderId, "IN_EXECUTION");
 
         await StartExecutionAsync(client, orderId);
@@ -135,13 +141,11 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             expectedStock: PartInitialStock,
             expectedReserved: PartItemQuantity);
 
-        await GenerateBudgetAsync(client, orderId);
-        await SendBudgetAsync(client, orderId);
+        await SimulateBudgetGeneratedAsync(orderId, ExpectedBudgetTotalInCents);
         await AssertOrderStatusAsync(client, orderId, "AWAITING_APPROVAL");
 
-        var rejectResponse = await client.PostAsJsonAsync(
-            $"/api/service-orders/{orderId}/budget-decision", new { decision = "reject" });
-        rejectResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Compensation: BudgetRejected saga event (ADR-011).
+        await SimulateBudgetRejectedAsync(orderId);
 
         await AssertOrderStatusAsync(client, orderId, "CANCELLED");
 
@@ -173,22 +177,21 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         var awaitingId = await CreateServiceOrderAsync(client, customerId, vehicleId);
         await StartDiagnosisAsync(client, awaitingId);
         await AddServiceItemAsync(client, awaitingId, serviceId);
-        await GenerateBudgetAsync(client, awaitingId);
-        await SendBudgetAsync(client, awaitingId);
+        await SimulateBudgetGeneratedAsync(awaitingId, ServicePriceInCents);
 
         var inExecutionId = await CreateServiceOrderAsync(client, customerId, vehicleId);
         await StartDiagnosisAsync(client, inExecutionId);
         await AddServiceItemAsync(client, inExecutionId, serviceId);
-        await GenerateBudgetAsync(client, inExecutionId);
-        await SendBudgetAsync(client, inExecutionId);
-        await ApproveAsync(client, inExecutionId);
+        await SimulateBudgetGeneratedAsync(inExecutionId, ServicePriceInCents);
+        await SimulateBudgetApprovedAsync(inExecutionId);
+        await SimulatePaymentConfirmedAsync(inExecutionId);
 
         var deliveredId = await CreateServiceOrderAsync(client, customerId, vehicleId);
         await StartDiagnosisAsync(client, deliveredId);
         await AddServiceItemAsync(client, deliveredId, serviceId);
-        await GenerateBudgetAsync(client, deliveredId);
-        await SendBudgetAsync(client, deliveredId);
-        await ApproveAsync(client, deliveredId);
+        await SimulateBudgetGeneratedAsync(deliveredId, ServicePriceInCents);
+        await SimulateBudgetApprovedAsync(deliveredId);
+        await SimulatePaymentConfirmedAsync(deliveredId);
         await StartExecutionAsync(client, deliveredId);
         await CompleteAsync(client, deliveredId);
         await DeliverAsync(client, deliveredId);
@@ -203,29 +206,6 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         orders[1].Status.Should().Be("AWAITING_APPROVAL");
         orders[2].Status.Should().Be("IN_DIAGNOSIS");
         orders[3].Status.Should().Be("RECEIVED");
-    }
-
-    [Fact]
-    public async Task BudgetDecision_WithInvalidDecision_ShouldReturn400()
-    {
-        var client = await AuthenticatedClientAsync();
-
-        var customerId = await CreateCustomerAsync(
-            client, document: "52998224725", email: "invalid@example.com", phone: "11977776666");
-        var vehicleId = await CreateVehicleAsync(client, customerId, plate: "GHI3F45");
-        var serviceId = await CreateServiceAsync(client, name: "Balanceamento");
-        var partId = await CreatePartAsync(client, code: "OIL-003", name: "Oleo de motor");
-
-        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
-        await StartDiagnosisAsync(client, orderId);
-        await AddServiceItemAsync(client, orderId, serviceId);
-        await AddPartItemAsync(client, orderId, partId);
-        await GenerateBudgetAsync(client, orderId);
-        await SendBudgetAsync(client, orderId);
-
-        var response = await client.PostAsJsonAsync(
-            $"/api/service-orders/{orderId}/budget-decision", new { decision = "invalid" });
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     // ========================================================================
@@ -386,30 +366,34 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    private static async Task<BudgetDto> GenerateBudgetAsync(HttpClient client, Guid orderId)
+    // Stands in for the future BudgetGenerated/BudgetApproved/PaymentConfirmed/BudgetRejected
+    // MassTransit consumers (F4-13) by invoking the same handlers directly.
+    private async Task<ServiceOrderResponse> SimulateBudgetGeneratedAsync(Guid orderId, int totalInCents)
     {
-        var response = await client.PostAsJsonAsync(
-            $"/api/service-orders/{orderId}/budget", new { });
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-
-        return await ReadAsync<BudgetDto>(response);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<BudgetGeneratedHandler>();
+        return await handler.ExecuteAsync(orderId, Guid.NewGuid(), totalInCents);
     }
 
-    private static async Task SendBudgetAsync(HttpClient client, Guid orderId)
+    private async Task SimulateBudgetApprovedAsync(Guid orderId)
     {
-        var response = await client.PostAsJsonAsync(
-            $"/api/service-orders/{orderId}/send-budget", new { });
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<BudgetApprovedHandler>();
+        await handler.ExecuteAsync(orderId);
     }
 
-    private static async Task ApproveAsync(HttpClient client, Guid orderId)
+    private async Task SimulateBudgetRejectedAsync(Guid orderId)
     {
-        var response = await client.PostAsJsonAsync(
-            $"/api/service-orders/{orderId}/budget-decision", new { decision = "approve" });
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<BudgetRejectedHandler>();
+        await handler.ExecuteAsync(orderId);
+    }
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    private async Task SimulatePaymentConfirmedAsync(Guid orderId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetRequiredService<PaymentConfirmedHandler>();
+        await handler.ExecuteAsync(orderId);
     }
 
     private static async Task StartExecutionAsync(HttpClient client, Guid orderId)
@@ -492,7 +476,6 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
     }
 
     private sealed record LoginDto(string Token);
-    private sealed record BudgetDto(Guid Id, int TotalInCents, string TotalFormatted, string Status, DateTime CreatedAt);
     private sealed record ServiceOrderStatusDto(Guid Id, string Status, DateTime? DeliveredAt);
     private sealed record ServiceOrderSummaryDto(Guid Id, string Status);
 }

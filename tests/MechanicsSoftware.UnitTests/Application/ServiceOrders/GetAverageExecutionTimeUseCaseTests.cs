@@ -39,9 +39,9 @@ public class GetAverageExecutionTimeUseCaseTests
         var order = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         order.StartDiagnosis();
         order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        order.GenerateBudget();
-        order.SendBudget();
-        order.Approve();
+        order.AttachBudget(Guid.NewGuid(), new Money(5000));
+        order.ConfirmBudgetApproval();
+        order.ConfirmPayment();
         order.Complete();
 
         var mockOrders = MockDbSetHelper.CreateMockDbSet([order]);

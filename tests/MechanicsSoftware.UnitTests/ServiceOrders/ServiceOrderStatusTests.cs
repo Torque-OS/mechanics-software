@@ -32,17 +32,41 @@ public class ServiceOrderStatusTests
     }
 
     [Fact]
-    public void TransitionTo_AwaitingApprovalToInExecution_Valid()
+    public void TransitionTo_AwaitingApprovalToAwaitingPayment_Valid()
     {
         var status = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingApproval);
-        var result = status.TransitionTo(ServiceOrderStatus.Status.InExecution);
-        result.Value.Should().Be(ServiceOrderStatus.Status.InExecution);
+        var result = status.TransitionTo(ServiceOrderStatus.Status.AwaitingPayment);
+        result.Value.Should().Be(ServiceOrderStatus.Status.AwaitingPayment);
     }
 
     [Fact]
     public void TransitionTo_AwaitingApprovalToCancelled_Valid()
     {
         var status = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingApproval);
+        var result = status.TransitionTo(ServiceOrderStatus.Status.Cancelled);
+        result.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public void TransitionTo_AwaitingPaymentToInExecution_Valid()
+    {
+        var status = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingPayment);
+        var result = status.TransitionTo(ServiceOrderStatus.Status.InExecution);
+        result.Value.Should().Be(ServiceOrderStatus.Status.InExecution);
+    }
+
+    [Fact]
+    public void TransitionTo_AwaitingPaymentToCancelled_Valid()
+    {
+        var status = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingPayment);
+        var result = status.TransitionTo(ServiceOrderStatus.Status.Cancelled);
+        result.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public void TransitionTo_InExecutionToCancelled_Valid()
+    {
+        var status = new ServiceOrderStatus(ServiceOrderStatus.Status.InExecution);
         var result = status.TransitionTo(ServiceOrderStatus.Status.Cancelled);
         result.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
     }
@@ -126,6 +150,7 @@ public class ServiceOrderStatusTests
         new ServiceOrderStatus(ServiceOrderStatus.Status.Received).ToString().Should().Be("RECEIVED");
         new ServiceOrderStatus(ServiceOrderStatus.Status.InDiagnosis).ToString().Should().Be("IN_DIAGNOSIS");
         new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingApproval).ToString().Should().Be("AWAITING_APPROVAL");
+        new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingPayment).ToString().Should().Be("AWAITING_PAYMENT");
         new ServiceOrderStatus(ServiceOrderStatus.Status.InExecution).ToString().Should().Be("IN_EXECUTION");
         new ServiceOrderStatus(ServiceOrderStatus.Status.Completed).ToString().Should().Be("COMPLETED");
         new ServiceOrderStatus(ServiceOrderStatus.Status.Delivered).ToString().Should().Be("DELIVERED");

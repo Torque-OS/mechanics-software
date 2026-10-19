@@ -79,7 +79,6 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
                 stock_movements,
                 part_items,
                 service_items,
-                budgets,
                 service_orders,
                 vehicles,
                 customers,

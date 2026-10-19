@@ -91,8 +91,10 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         }
     }
 
-    // Owned scalars (e.g. Budget) ARE mutated after creation (Approve/Reject), so we cannot
-    // blindly flip Modified → Added. A single DB lookup distinguishes new from existing.
+    // Unique owned scalars ARE mutated after creation, so we cannot blindly flip
+    // Modified → Added. A single DB lookup distinguishes new from existing. No entity currently
+    // uses a mutable unique owned scalar (Budget moved to the Billing Service — ADR-010), but
+    // this stays in place for the next one.
     private async Task PromoteNewOwnedScalarsAsync(CancellationToken cancellationToken)
     {
         var candidates = ChangeTracker.Entries()

@@ -159,6 +159,14 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("BudgetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("budget_id");
+
+                    b.Property<int?>("BudgetTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("budget_total");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -366,43 +374,6 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsOne("MechanicsSoftware.Domain.Entities.Budget", "Budget", b1 =>
-                        {
-                            b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid")
-                                .HasColumnName("id");
-
-                            b1.Property<DateTime>("CreatedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("created_at");
-
-                            b1.Property<Guid>("ServiceOrderId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("service_order_id");
-
-                            b1.Property<string>("Status")
-                                .IsRequired()
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)")
-                                .HasColumnName("status");
-
-                            b1.Property<int>("Total")
-                                .HasColumnType("integer")
-                                .HasColumnName("total");
-
-                            b1.HasKey("Id");
-
-                            b1.HasIndex("ServiceOrderId")
-                                .IsUnique()
-                                .HasDatabaseName("ix_budgets_service_order_id");
-
-                            b1.ToTable("budgets", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("ServiceOrderId");
-                        });
-
                     b.OwnsMany("MechanicsSoftware.Domain.Entities.PartItem", "PartItems", b1 =>
                         {
                             b1.Property<Guid>("Id")
@@ -487,8 +458,6 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("ServiceOrderId");
                         });
-
-                    b.Navigation("Budget");
 
                     b.Navigation("PartItems");
 

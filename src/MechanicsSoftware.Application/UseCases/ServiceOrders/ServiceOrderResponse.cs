@@ -32,18 +32,6 @@ public sealed record PartItemResponse(
             item.Total.Cents);
 }
 
-public sealed record BudgetResponse(
-    Guid Id,
-    int TotalInCents,
-    string TotalFormatted,
-    string Status,
-    DateTime CreatedAt)
-{
-    public static BudgetResponse From(Budget budget) =>
-        new(budget.Id, budget.Total.Cents, budget.Total.ToFormatted(),
-            budget.Status.ToString(), budget.CreatedAt);
-}
-
 public sealed record ServiceOrderResponse(
     Guid Id,
     Guid CustomerId,
@@ -52,7 +40,9 @@ public sealed record ServiceOrderResponse(
     DateTime CreatedAt,
     DateTime? CompletedAt,
     DateTime? DeliveredAt,
-    BudgetResponse? Budget,
+    Guid? BudgetId,
+    int? BudgetTotalInCents,
+    string? BudgetTotalFormatted,
     IReadOnlyList<ServiceItemResponse> ServiceItems,
     IReadOnlyList<PartItemResponse> PartItems)
 {
@@ -64,7 +54,9 @@ public sealed record ServiceOrderResponse(
             order.CreatedAt,
             order.CompletedAt,
             order.DeliveredAt,
-            order.Budget is not null ? BudgetResponse.From(order.Budget) : null,
+            order.BudgetId,
+            order.BudgetTotal?.Cents,
+            order.BudgetTotal?.ToFormatted(),
             order.ServiceItems.Select(ServiceItemResponse.From).ToList(),
             order.PartItems.Select(PartItemResponse.From).ToList());
 }

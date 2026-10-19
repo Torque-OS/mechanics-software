@@ -2,6 +2,7 @@ using FluentAssertions;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 using MechanicsSoftware.Domain.Entities;
+using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.UnitTests.Helpers;
 using Moq;
 
@@ -16,9 +17,9 @@ public class GetDailyServiceOrderVolumeUseCaseTests
         var completed = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         completed.StartDiagnosis();
         completed.AddServiceItem(Guid.NewGuid(), "Oil Change", new(5000), 1);
-        completed.GenerateBudget();
-        completed.SendBudget();
-        completed.Approve();
+        completed.AttachBudget(Guid.NewGuid(), new Money(1));
+        completed.ConfirmBudgetApproval();
+        completed.ConfirmPayment();
         completed.Complete();
 
         var mockOrders = MockDbSetHelper.CreateMockDbSet([opened, completed]);
