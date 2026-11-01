@@ -34,7 +34,9 @@ builder.Services.AddOpenTelemetry()
             .AddHttpClientInstrumentation(options =>
             {
                 options.RecordException = true;
-            });
+            })
+            // MassTransit's ActivitySource: publish/send/consume spans for the saga messages.
+            .AddSource("MassTransit");
 
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
