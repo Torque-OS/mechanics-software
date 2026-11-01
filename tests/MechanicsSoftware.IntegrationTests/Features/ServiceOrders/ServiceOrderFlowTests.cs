@@ -8,10 +8,12 @@ using System.Text.Json;
 using FluentAssertions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
+using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.IntegrationTests.Base;
 using MechanicsSoftware.IntegrationTests.Fixtures;
 using MechanicsSoftware.Infrastructure.Persistence;
 using MechanicsSoftware.Infrastructure.Security;
+using MassTransit.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using MechanicsSoftware.Domain.Authorization;
@@ -206,6 +208,30 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         orders[1].Status.Should().Be("AWAITING_APPROVAL");
         orders[2].Status.Should().Be("IN_DIAGNOSIS");
         orders[3].Status.Should().Be("RECEIVED");
+    }
+
+    [Fact]
+    public async Task Create_PublishesServiceOrderOpenedThroughOutbox()
+    {
+        var client = await AuthenticatedClientAsync();
+
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        var harness = Factory.Services.GetTestHarness();
+        (await harness.Published.Any<ServiceOrderOpened>(m => m.Context.Message.ServiceOrderId == orderId))
+            .Should().BeTrue("the outbox must deliver ServiceOrderOpened after the order is saved");
+
+        var published = harness.Published
+            .Select<ServiceOrderOpened>(m => m.Context.Message.ServiceOrderId == orderId)
+            .Single()
+            .Context.Message;
+
+        published.CustomerId.Should().Be(customerId);
+        published.VehicleId.Should().Be(vehicleId);
+        published.OpenedAt.Kind.Should().Be(DateTimeKind.Utc);
     }
 
     // ========================================================================
