@@ -1,6 +1,7 @@
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.Exceptions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Commands;
+using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,7 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 
 public sealed class CreateServiceOrderHandler(
     IAppDbContext db,
+    IEventPublisher eventPublisher,
     ILogger<CreateServiceOrderHandler> logger,
     IServiceOrderMetrics? metrics = null)
 {
@@ -23,6 +25,13 @@ public sealed class CreateServiceOrderHandler(
         var order = ServiceOrder.Create(Guid.NewGuid(), command.CustomerId, command.VehicleId);
 
         db.ServiceOrders.Add(order);
+
+        // Starts the saga (ADR-011). Published before SaveChangesAsync on purpose: the outbox
+        // stores the message in the same transaction as the order, so both are saved or neither is.
+        await eventPublisher.PublishAsync(
+            new ServiceOrderOpened(order.Id, order.CustomerId, order.VehicleId, order.CreatedAt),
+            cancellationToken);
+
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
