@@ -7,7 +7,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Reacts to the <c>BudgetRejected</c> event (customer rejected the budget, or Billing failed to
 /// generate one) by cancelling the order — the first compensation step of ADR-011.
 /// </summary>
-public sealed class BudgetRejectedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<BudgetRejectedHandler> logger)
+public sealed class BudgetRejectedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<BudgetRejectedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -19,6 +23,7 @@ public sealed class BudgetRejectedHandler(IAppDbContext db, IEmailNotifier email
         await db.ReleaseReservedPartsAsync(order, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

@@ -8,6 +8,7 @@ namespace MechanicsSoftware.API.Metrics;
 public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
+    IServiceOrderStatusHistoryRepository historyRepository,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(1);
@@ -37,15 +38,7 @@ public sealed class ServiceOrderMetricsRefreshService(
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = await db.ServiceOrderStatusHistory
-                .Select(history => new
-                {
-
-                    history.ServiceOrderId,
-                    history.Status,
-                    history.EnteredAt
-                })
-                .ToListAsync(cancellationToken);
+            var statusHistory = await historyRepository.GetAllAsync(cancellationToken);
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -66,13 +59,6 @@ public sealed class ServiceOrderMetricsRefreshService(
                 orders.LongCount(order => order.CompletedAt >= today));
 
             var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
-            foreach (var status in statuses)
-            {
-                metrics.SetOrderTotalByStatus(
-                    status,
-                    orders.LongCount(order => order.Status.ToString() == status));
-            }
-
             foreach (var status in statuses)
             {
                 var periods = statusHistory

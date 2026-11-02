@@ -81,6 +81,8 @@ jobs:
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MONGODB_CONNECTION_STRING: ${{ secrets.MONGODB_CONNECTION_STRING }}
+          MONGODB_DATABASE: ${{ secrets.MONGODB_DATABASE }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GATEWAY_KEY: ${{ secrets.GATEWAY_KEY }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

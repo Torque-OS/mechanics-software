@@ -8,7 +8,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Execution Service could not finish the repair, the Billing Service refunds the payment and
 /// cancels the budget, and the OS Service cancels the order and releases reserved parts.
 /// </summary>
-public sealed class ExecutionFailedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<ExecutionFailedHandler> logger)
+public sealed class ExecutionFailedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<ExecutionFailedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -20,6 +24,7 @@ public sealed class ExecutionFailedHandler(IAppDbContext db, IEmailNotifier emai
         await db.ReleaseReservedPartsAsync(order, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

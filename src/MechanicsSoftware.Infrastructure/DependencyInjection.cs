@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Infrastructure.Notifications;
 using MechanicsSoftware.Infrastructure.Persistence;
+using MechanicsSoftware.Infrastructure.Persistence.Mongo;
 using MechanicsSoftware.Infrastructure.Persistence.SQL;
 using MechanicsSoftware.Infrastructure.Security;
 
@@ -29,6 +30,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+        services.AddSingleton<IServiceOrderStatusHistoryRepository, MongoServiceOrderStatusHistoryRepository>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<DatabaseSeeder>();

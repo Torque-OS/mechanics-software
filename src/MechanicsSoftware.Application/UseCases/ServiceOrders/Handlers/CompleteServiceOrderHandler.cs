@@ -10,7 +10,8 @@ public sealed class CompleteServiceOrderHandler(
     IAppDbContext db,
     IEmailNotifier emailNotifier,
     ILogger<CompleteServiceOrderHandler> logger,
-    IServiceOrderMetrics? metrics = null)
+    IServiceOrderMetrics? metrics = null,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -31,6 +32,7 @@ public sealed class CompleteServiceOrderHandler(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         logger.LogInformation(
             "Service order completed {EventName} {ServiceOrderId} {OccurredAt}",

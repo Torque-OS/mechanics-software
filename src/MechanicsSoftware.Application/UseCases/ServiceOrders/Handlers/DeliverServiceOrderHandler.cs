@@ -3,7 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 
-public sealed class DeliverServiceOrderHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<DeliverServiceOrderHandler> logger)
+public sealed class DeliverServiceOrderHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<DeliverServiceOrderHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -13,6 +17,7 @@ public sealed class DeliverServiceOrderHandler(IAppDbContext db, IEmailNotifier 
         order.Deliver();
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

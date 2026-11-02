@@ -7,7 +7,8 @@ public sealed class StartExecutionHandler(
     IAppDbContext db,
     IEmailNotifier emailNotifier,
     ILogger<StartExecutionHandler> logger,
-    IServiceOrderMetrics? metrics = null)
+    IServiceOrderMetrics? metrics = null,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -17,6 +18,7 @@ public sealed class StartExecutionHandler(
         order.StartExecution();
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

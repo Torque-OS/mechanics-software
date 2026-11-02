@@ -7,7 +7,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Reacts to the <c>BudgetApproved</c> event published by the Billing Service once the customer
 /// approves the budget (ADR-011). See <see cref="BudgetGeneratedHandler"/> for the wiring note.
 /// </summary>
-public sealed class BudgetApprovedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<BudgetApprovedHandler> logger)
+public sealed class BudgetApprovedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<BudgetApprovedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -17,6 +21,7 @@ public sealed class BudgetApprovedHandler(IAppDbContext db, IEmailNotifier email
         order.ConfirmBudgetApproval();
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

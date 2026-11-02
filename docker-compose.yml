@@ -15,6 +15,13 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo:8
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+
   api:
     build: .
     ports:
@@ -22,11 +29,16 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=mechanics_software;Username=postgres;Password=postgres
+      - MongoDb__ConnectionString=mongodb://mongo:27017
+      - MongoDb__Database=mechanics_software
       - JWT_SECRET=dev-secret-change-in-production-min-32-chars!!
       - GATEWAY_KEY=${GATEWAY_KEY:-}
     depends_on:
       db:
         condition: service_healthy
+      mongo:
+        condition: service_started
 
 volumes:
   postgres_data:
+  mongo_data:

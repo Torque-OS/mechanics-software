@@ -120,6 +120,8 @@ All variables with a default work out of the box for local development. Producti
 | Variable | Required | Description | Default |
 |---|---|---|---|
 | `ConnectionStrings__DefaultConnection` | Yes | PostgreSQL connection string | set in `appsettings.Development.json` |
+| `MongoDb__ConnectionString` | Yes | MongoDB connection string for service-order status history | `mongodb://localhost:27018` locally |
+| `MongoDb__Database` | No | MongoDB database name for service-order status history | `mechanics_software` |
 | `JWT_SECRET` | Yes | Signing secret — **min 32 chars** — **must match `mechanics-lambda`** | pre-configured for dev |
 | `JWT_EXPIRATION_MINUTES` | No | Token lifetime in minutes | `60` |
 | `GATEWAY_KEY` | No* | Shared secret with API Gateway. When set, requests without `X-Gateway-Key` are rejected with 403. Leave empty locally. | `` (disabled) |

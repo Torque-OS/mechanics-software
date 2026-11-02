@@ -9,7 +9,8 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 public sealed class CreateServiceOrderHandler(
     IAppDbContext db,
     ILogger<CreateServiceOrderHandler> logger,
-    IServiceOrderMetrics? metrics = null)
+    IServiceOrderMetrics? metrics = null,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         CreateServiceOrderCommand command, CancellationToken cancellationToken = default)
@@ -24,6 +25,7 @@ public sealed class CreateServiceOrderHandler(
 
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, order.CreatedAt, cancellationToken);
 
         logger.LogInformation(
             "Service order opened {EventName} {ServiceOrderId} {OccurredAt}",

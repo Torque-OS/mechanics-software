@@ -10,7 +10,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// plain handler so the OS Service domain and persistence side of the saga can be built and
 /// tested independently of the broker (F4-08).
 /// </summary>
-public sealed class BudgetGeneratedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<BudgetGeneratedHandler> logger)
+public sealed class BudgetGeneratedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<BudgetGeneratedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, Guid budgetId, int budgetTotalInCents, CancellationToken cancellationToken = default)
@@ -20,6 +24,7 @@ public sealed class BudgetGeneratedHandler(IAppDbContext db, IEmailNotifier emai
         order.AttachBudget(budgetId, new Money(budgetTotalInCents));
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

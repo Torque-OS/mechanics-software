@@ -7,7 +7,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Reacts to the <c>PaymentFailed</c> event by cancelling the order — the Billing Service is
 /// responsible for cancelling its own budget as part of the same compensation (ADR-011).
 /// </summary>
-public sealed class PaymentFailedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<PaymentFailedHandler> logger)
+public sealed class PaymentFailedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<PaymentFailedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -19,6 +23,7 @@ public sealed class PaymentFailedHandler(IAppDbContext db, IEmailNotifier emailN
         await db.ReleaseReservedPartsAsync(order, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 

@@ -7,7 +7,11 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Reacts to the <c>PaymentConfirmed</c> event published by the Billing Service after a
 /// successful Mercado Pago payment (ADR-011), moving the order to execution.
 /// </summary>
-public sealed class PaymentConfirmedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<PaymentConfirmedHandler> logger)
+public sealed class PaymentConfirmedHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<PaymentConfirmedHandler> logger,
+    IServiceOrderStatusHistoryRepository? history = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -17,6 +21,7 @@ public sealed class PaymentConfirmedHandler(IAppDbContext db, IEmailNotifier ema
         order.ConfirmPayment();
 
         await db.SaveChangesAsync(cancellationToken);
+        await history.AppendStatusHistoryAsync(order, DateTime.UtcNow, cancellationToken);
 
         await emailNotifier.TrySendStatusEmailAsync(db, logger, order, cancellationToken);
 
