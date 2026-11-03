@@ -10,7 +10,10 @@ namespace MechanicsSoftware.Infrastructure.Messaging;
 /// </summary>
 public sealed class MassTransitEventPublisher(IPublishEndpoint publishEndpoint) : IEventPublisher
 {
-    public Task PublishAsync<TEvent>(TEvent integrationEvent, CancellationToken cancellationToken = default)
+    public Task PublishAsync<TEvent>(
+        TEvent integrationEvent, Guid? correlationId = null, CancellationToken cancellationToken = default)
         where TEvent : class =>
-        publishEndpoint.Publish(integrationEvent, cancellationToken);
+        correlationId is { } id
+            ? publishEndpoint.Publish(integrationEvent, context => context.CorrelationId = id, cancellationToken)
+            : publishEndpoint.Publish(integrationEvent, cancellationToken);
 }

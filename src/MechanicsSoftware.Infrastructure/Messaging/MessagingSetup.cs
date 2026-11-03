@@ -21,6 +21,12 @@ public static class MessagingSetup
         {
             bus.SetKebabCaseEndpointNameFormatter();
 
+            // Saga consumers (ADR-011, F4-22) — the happy path's event side.
+            bus.AddConsumer<BudgetGeneratedConsumer, BudgetGeneratedConsumerDefinition>();
+            bus.AddConsumer<BudgetApprovedConsumer, BudgetApprovedConsumerDefinition>();
+            bus.AddConsumer<PaymentConfirmedConsumer, PaymentConfirmedConsumerDefinition>();
+            bus.AddConsumer<ExecutionCompletedConsumer, ExecutionCompletedConsumerDefinition>();
+
             // Transactional outbox (ADR-011): published messages are stored in the OS Service
             // database in the same transaction as the entity changes and delivered afterwards.
             bus.AddEntityFrameworkOutbox<AppDbContext>(outbox =>

@@ -8,6 +8,7 @@ using MechanicsSoftware.Domain.Exceptions;
 using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.UnitTests.Helpers;
 using Moq;
+using TorqueOS.Contracts.Execution;
 
 namespace MechanicsSoftware.UnitTests.Application.ServiceOrders.SagaEvents;
 
@@ -94,10 +95,58 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("IN_EXECUTION");
+    }
+
+    [Fact]
+    public async Task PaymentConfirmedHandler_FromAwaitingPayment_PublishesEnqueueExecution()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IEventPublisher>();
+
+        await new PaymentConfirmedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+            It.Is<EnqueueExecution>(e => e.ServiceOrderId == order.Id),
+            order.Id,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExecutionCompletedHandler_FromInExecution_MovesToCompleted()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        order.ConfirmPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new ExecutionCompletedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionCompletedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("COMPLETED");
+    }
+
+    [Fact]
+    public async Task ExecutionCompletedHandler_WrongStatus_ThrowsInvalidStatusTransitionException()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var act = async () => await new ExecutionCompletedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionCompletedHandler>())
+            .ExecuteAsync(order.Id);
+
+        await act.Should().ThrowAsync<InvalidStatusTransitionException>();
     }
 
     [Fact]
