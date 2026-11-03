@@ -198,14 +198,14 @@ Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 | Vehicles | `GET/POST /api/vehicles` · `GET/PUT/DELETE /api/vehicles/{id}` |
 | Parts | `GET/POST /api/parts` · `GET/PUT/DELETE /api/parts/{id}` · `PATCH /api/parts/{id}/stock` |
 | Services | `GET/POST /api/services` · `GET/PUT/DELETE /api/services/{id}` |
-| Service Orders | `GET/POST /api/service-orders` · lifecycle endpoints below |
+| Service Orders | `GET/POST /api/service-orders` · `GET /api/service-orders/{id}/status` · `GET /api/service-orders/{id}/history` · lifecycle endpoints below |
 
 ### Service Order Lifecycle
 
 ```
 RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXECUTION → COMPLETED → DELIVERED
-                                   ↓                    ↓               ↓
-                               CANCELLED ←───────────────┴───────────────┘
+                 ↓                 ↓                    ↓               ↓
+             CANCELLED ←───────────┴────────────────────┴───────────────┘
 ```
 
 | Step | Trigger |
@@ -216,13 +216,15 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXEC
 | Budget generated / approved | `BudgetGenerated` / `BudgetApproved` Saga event from the Billing Service (ADR-011) |
 | Payment confirmed | `PaymentConfirmed` Saga event from the Billing Service |
 | Start execution | `POST /api/service-orders/{id}/start-execution` |
-| Complete | `POST /api/service-orders/{id}/complete` |
+| Complete | `ExecutionCompleted` Saga event from the Execution Service, or `POST /api/service-orders/{id}/complete` |
 | Deliver | `POST /api/service-orders/{id}/deliver` |
-| Cancel (compensation) | `BudgetRejected` / `PaymentFailed` / `ExecutionFailed` Saga event |
+| Cancel (compensation) | `BudgetFailed` (from `IN_DIAGNOSIS`) / `BudgetRejected` / `PaymentFailed` / `ExecutionFailed` Saga event |
 
-The Saga events are not yet wired to a message broker (broker provisioning is F4-08, the
-MassTransit consumers are F4-13); until then, `Handlers/SagaEvents/` holds the OS-side domain
-logic ready to be invoked by those consumers.
+Saga events are consumed from RabbitMQ by `Infrastructure/Messaging/Consumers` (F4-12), one queue
+per event prefixed with the service name (`os-service-budget-generated`, …). Each consumer calls the
+matching handler in `Handlers/SagaEvents/`. Repeated deliveries are harmless: the inbox skips a
+`MessageId` already consumed, and the handlers ignore an event whose effect is already applied.
+Every status change is recorded and returned by `GET /api/service-orders/{id}/history`.
 
 Full schemas available at `/swagger`.
 
