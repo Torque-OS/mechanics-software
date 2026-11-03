@@ -70,7 +70,7 @@ A RESTful API implementing the **OS Service** of the Fase 4 microservices split 
 
 ### Option A — Docker Compose (recommended)
 
-Starts the API and PostgreSQL together:
+Starts the API, PostgreSQL and RabbitMQ together:
 
 ```bash
 docker compose up --build
@@ -81,15 +81,17 @@ docker compose up --build
 | API | `http://localhost:8080` |
 | Swagger UI | `http://localhost:8080/swagger` |
 | PostgreSQL | `localhost:5435` |
+| RabbitMQ (AMQP) | `localhost:5672` |
+| RabbitMQ management UI | `http://localhost:15672` (`mechanics` / `mechanics`) |
 
 Migrations and the default admin user are applied automatically on startup.
 
 ### Option B — dotnet run
 
-**1. Start only the database:**
+**1. Start only the database and the message broker:**
 
 ```bash
-docker compose up db -d
+docker compose up db rabbitmq -d
 ```
 
 **2. Configure environment variables:**
@@ -131,6 +133,11 @@ All variables with a default work out of the box for local development. Producti
 | `SMTP_USER` | Yes (email) | SMTP username | — |
 | `SMTP_PASS` | Yes (email) | SMTP password or App Password | — |
 | `SMTP_FROM` | Yes (email) | Sender address | — |
+| `RABBITMQ_HOST` | Yes | RabbitMQ host used by MassTransit (ADR-011) | `localhost` in `appsettings.Development.json` |
+| `RABBITMQ_PORT` | No | AMQP port | `5672` |
+| `RABBITMQ_VHOST` | No | RabbitMQ virtual host | `/` |
+| `RABBITMQ_USERNAME` | Yes | RabbitMQ user | `mechanics` (matches `docker-compose.yml`) |
+| `RABBITMQ_PASSWORD` | Yes | RabbitMQ password | `mechanics` (matches `docker-compose.yml`) |
 
 > *`GATEWAY_KEY` must match the `gateway_key` Terraform variable in `mechanics-infra-k8s`.
 

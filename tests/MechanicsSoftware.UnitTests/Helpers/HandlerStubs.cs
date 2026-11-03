@@ -9,5 +9,7 @@ internal static class HandlerStubs
 {
     public static IEmailNotifier EmailNotifier() => Mock.Of<IEmailNotifier>();
 
+    public static IEventPublisher EventPublisher() => Mock.Of<IEventPublisher>();
+
     public static ILogger<T> Logger<T>() => NullLogger<T>.Instance;
 }

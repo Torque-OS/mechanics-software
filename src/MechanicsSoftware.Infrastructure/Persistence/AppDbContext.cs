@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MechanicsSoftware.Application.Abstractions;
@@ -24,6 +25,12 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // MassTransit transactional outbox (ADR-011). Table names follow the snake_case
+        // convention of this database; column names are owned by MassTransit and kept as-is.
+        modelBuilder.AddInboxStateEntity(entity => entity.ToTable("inbox_state"));
+        modelBuilder.AddOutboxMessageEntity(entity => entity.ToTable("outbox_message"));
+        modelBuilder.AddOutboxStateEntity(entity => entity.ToTable("outbox_state"));
     }
 
     // Workaround for EF Core 9.0.14 + Npgsql 9.0.4: brand-new owned entities (collection items
