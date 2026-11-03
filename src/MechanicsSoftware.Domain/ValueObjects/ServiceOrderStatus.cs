@@ -24,12 +24,14 @@ public sealed class ServiceOrderStatus(ServiceOrderStatus.Status value) : ValueO
 
     // AwaitingApproval/AwaitingPayment/InExecution are entered on events from the Billing and
     // Execution services (BudgetGenerated, BudgetApproved, PaymentConfirmed) once the Saga
-    // (ADR-011) is wired — see F4-13. Cancelled is reachable from any pre-execution state as a
-    // saga compensation (BudgetRejected, PaymentFailed, ExecutionFailed).
+    // (ADR-011) is wired — see F4-12. Cancelled is reachable from InDiagnosis (BudgetFailed) and from
+    // every later pre-completion state as a saga compensation (BudgetRejected, PaymentFailed,
+    // ExecutionFailed).
     private static readonly HashSet<(Status From, Status To)> _validTransitions =
     [
         (Status.Received,         Status.InDiagnosis),
         (Status.InDiagnosis,      Status.AwaitingApproval),
+        (Status.InDiagnosis,      Status.Cancelled),
         (Status.AwaitingApproval, Status.AwaitingPayment),
         (Status.AwaitingApproval, Status.Cancelled),
         (Status.AwaitingPayment,  Status.InExecution),
