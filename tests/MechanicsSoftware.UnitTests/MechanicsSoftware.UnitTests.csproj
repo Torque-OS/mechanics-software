@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\MechanicsSoftware.Domain\MechanicsSoftware.Domain.csproj" />
     <ProjectReference Include="..\..\src\MechanicsSoftware.Application\MechanicsSoftware.Application.csproj" />
     <ProjectReference Include="..\..\src\MechanicsSoftware.Infrastructure\MechanicsSoftware.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MechanicsSoftware.API\MechanicsSoftware.API.csproj" />
   </ItemGroup>
 
 </Project>

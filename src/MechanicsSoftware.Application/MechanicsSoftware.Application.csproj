@@ -2,10 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MechanicsSoftware.Domain\MechanicsSoftware.Domain.csproj" />
+    <ProjectReference Include="..\MechanicsSoftware.Contracts\MechanicsSoftware.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.16" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.18" />
   </ItemGroup>
 
   <PropertyGroup>

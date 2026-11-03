@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using MechanicsSoftware.Domain.Entities;
 using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.Domain.Enums;
@@ -18,25 +18,27 @@ public class ServiceOrderTests
         return o;
     }
 
-    private static ServiceOrder WithBudget()
+    // AttachBudget represents the OS Service receiving the BudgetGenerated event from the
+    // Billing Service (ADR-011); it both records the reference and moves to AwaitingApproval.
+    private static ServiceOrder AwaitingApproval()
     {
         var o = InDiagnosis();
         o.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        o.GenerateBudget();
+        o.AttachBudget(Guid.NewGuid(), new Money(5000));
         return o;
     }
 
-    private static ServiceOrder AwaitingApproval()
+    private static ServiceOrder AwaitingPayment()
     {
-        var o = WithBudget();
-        o.SendBudget();
+        var o = AwaitingApproval();
+        o.ConfirmBudgetApproval();
         return o;
     }
 
     private static ServiceOrder InExecution()
     {
-        var o = AwaitingApproval();
-        o.Approve();
+        var o = AwaitingPayment();
+        o.ConfirmPayment();
         return o;
     }
 
@@ -137,115 +139,109 @@ public class ServiceOrderTests
     }
 
     [Fact]
-    public void GenerateBudget_WithAvailableService_CreatesBudget()
+    public void AttachBudget_FromInDiagnosis_StatusIsAwaitingApproval()
     {
         var order = InDiagnosis();
         order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        var budget = order.GenerateBudget();
-        budget.Should().NotBeNull();
-        budget.Total.Cents.Should().Be(5000);
-    }
-
-    [Fact]
-    public void GenerateBudget_UnavailablePartExcludedFromTotal()
-    {
-        var order = InDiagnosis();
-        order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        order.AddPartItem(Guid.NewGuid(), "Oil Filter", new Money(2000), 1, PartAvailability.Available);
-        order.AddPartItem(Guid.NewGuid(), "Rare Part", new Money(9999), 1, PartAvailability.Unavailable);
-
-        var budget = order.GenerateBudget();
-
-        budget.Total.Cents.Should().Be(7000);
-    }
-
-    [Fact]
-    public void GenerateBudget_NoServiceItems_Throws()
-    {
-        var order = InDiagnosis();
-        order.AddPartItem(Guid.NewGuid(), "Filter", new Money(2000), 1, PartAvailability.Unavailable);
-        var act = () => order.GenerateBudget();
-        act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void GenerateBudget_WhenNotInDiagnosis_Throws()
-    {
-        var order = NewOrder();
-        var act = () => order.GenerateBudget();
-        act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void GenerateBudget_BudgetStatusIsPending()
-    {
-        var order = InDiagnosis();
-        order.AddServiceItem(Guid.NewGuid(), "Service A", new Money(1000), 1);
-        var budget = order.GenerateBudget();
-        budget.Status.Value.Should().Be(BudgetStatus.Status.Pending);
-    }
-
-    [Fact]
-    public void SendBudget_WithBudget_StatusIsAwaitingApproval()
-    {
-        var order = WithBudget();
-        order.SendBudget();
+        order.AttachBudget(Guid.NewGuid(), new Money(5000));
         order.Status.Value.Should().Be(ServiceOrderStatus.Status.AwaitingApproval);
     }
 
     [Fact]
-    public void SendBudget_WithoutBudget_Throws()
+    public void AttachBudget_SetsBudgetIdAndTotal()
+    {
+        var budgetId = Guid.NewGuid();
+        var order = InDiagnosis();
+        order.AttachBudget(budgetId, new Money(7000));
+        order.BudgetId.Should().Be(budgetId);
+        order.BudgetTotal!.Cents.Should().Be(7000);
+    }
+
+    [Fact]
+    public void AttachBudget_EmptyBudgetId_Throws()
     {
         var order = InDiagnosis();
-        var act = () => order.SendBudget();
+        var act = () => order.AttachBudget(Guid.Empty, new Money(5000));
         act.Should().Throw<DomainException>();
     }
 
     [Fact]
-    public void Approve_FromAwaitingApproval_StatusIsInExecution()
+    public void AttachBudget_NullTotal_Throws()
+    {
+        var order = InDiagnosis();
+        var act = () => order.AttachBudget(Guid.NewGuid(), null!);
+        act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void AttachBudget_WhenNotInDiagnosis_Throws()
+    {
+        var order = NewOrder();
+        var act = () => order.AttachBudget(Guid.NewGuid(), new Money(5000));
+        act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void ConfirmBudgetApproval_FromAwaitingApproval_StatusIsAwaitingPayment()
     {
         var order = AwaitingApproval();
-        order.Approve();
+        order.ConfirmBudgetApproval();
+        order.Status.Value.Should().Be(ServiceOrderStatus.Status.AwaitingPayment);
+    }
+
+    [Fact]
+    public void ConfirmBudgetApproval_WhenNotAwaitingApproval_Throws()
+    {
+        var order = InDiagnosis();
+        var act = () => order.ConfirmBudgetApproval();
+        act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void ConfirmPayment_FromAwaitingPayment_StatusIsInExecution()
+    {
+        var order = AwaitingPayment();
+        order.ConfirmPayment();
         order.Status.Value.Should().Be(ServiceOrderStatus.Status.InExecution);
     }
 
     [Fact]
-    public void Approve_BudgetStatusBecomesApproved()
+    public void ConfirmPayment_WhenNotAwaitingPayment_Throws()
     {
         var order = AwaitingApproval();
-        order.Approve();
-        order.Budget!.Status.Value.Should().Be(BudgetStatus.Status.Approved);
-    }
-
-    [Fact]
-    public void Approve_WhenNotAwaitingApproval_Throws()
-    {
-        var order = InDiagnosis();
-        var act = () => order.Approve();
+        var act = () => order.ConfirmPayment();
         act.Should().Throw<DomainException>();
     }
 
     [Fact]
-    public void Reject_FromAwaitingApproval_StatusIsCancelled()
+    public void Cancel_FromAwaitingApproval_StatusIsCancelled()
     {
         var order = AwaitingApproval();
-        order.Reject();
+        order.Cancel();
         order.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
     }
 
     [Fact]
-    public void Reject_BudgetStatusBecomesRejected()
+    public void Cancel_FromAwaitingPayment_StatusIsCancelled()
     {
-        var order = AwaitingApproval();
-        order.Reject();
-        order.Budget!.Status.Value.Should().Be(BudgetStatus.Status.Rejected);
+        var order = AwaitingPayment();
+        order.Cancel();
+        order.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
     }
 
     [Fact]
-    public void Reject_WhenNotAwaitingApproval_Throws()
+    public void Cancel_FromInExecution_StatusIsCancelled()
     {
-        var order = InDiagnosis();
-        var act = () => order.Reject();
+        var order = InExecution();
+        order.Cancel();
+        order.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public void Cancel_WhenReceived_Throws()
+    {
+        var order = NewOrder();
+        var act = () => order.Cancel();
         act.Should().Throw<DomainException>();
     }
 
@@ -319,11 +315,11 @@ public class ServiceOrderTests
         order.AddPartItem(Guid.NewGuid(), "Air Filter", new Money(3000), 2, PartAvailability.Available);
         order.AddPartItem(Guid.NewGuid(), "Rare Sensor", new Money(50000), 1, PartAvailability.Unavailable);
 
-        var budget = order.GenerateBudget();
-        budget.Total.Cents.Should().Be(26000);
+        order.AttachBudget(Guid.NewGuid(), new Money(26000));
+        order.BudgetTotal!.Cents.Should().Be(26000);
 
-        order.SendBudget();
-        order.Approve();
+        order.ConfirmBudgetApproval();
+        order.ConfirmPayment();
         order.StartExecution();
         order.Complete();
         order.Deliver();
@@ -338,12 +334,10 @@ public class ServiceOrderTests
         var order = NewOrder();
         order.StartDiagnosis();
         order.AddServiceItem(Guid.NewGuid(), "Inspection", new Money(10000), 1);
-        order.GenerateBudget();
-        order.SendBudget();
-        order.Reject();
+        order.AttachBudget(Guid.NewGuid(), new Money(10000));
+        order.Cancel();
 
         order.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
-        order.Budget!.Status.Value.Should().Be(BudgetStatus.Status.Rejected);
     }
 
     [Fact]
@@ -404,13 +398,5 @@ public class ServiceOrderTests
         var order = InDiagnosis();
         var act = () => order.AddPartItem(Guid.NewGuid(), "Oil Filter", new Money(2500), 0, PartAvailability.Available);
         act.Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void GenerateBudget_AlreadyGenerated_Throws()
-    {
-        var order = WithBudget();
-        var act = () => order.GenerateBudget();
-        act.Should().Throw<DomainException>().WithMessage("*Budget already generated*");
     }
 }

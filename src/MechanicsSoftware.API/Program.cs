@@ -5,18 +5,57 @@ using MechanicsSoftware.Infrastructure;
 using MechanicsSoftware.Infrastructure.Logging;
 using MechanicsSoftware.Infrastructure.Persistence;
 using MechanicsSoftware.Infrastructure.Persistence.SQL;
+using MechanicsSoftware.API.Metrics;
+using MechanicsSoftware.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics.CodeAnalysis;
+using Prometheus;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(
+            serviceName: builder.Configuration["DD_SERVICE"] ?? builder.Environment.ApplicationName,
+            serviceVersion: builder.Configuration["DD_VERSION"] ?? "unknown"))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = true;
+                options.Filter = httpContext =>
+                    !httpContext.Request.Path.StartsWithSegments("/health");
+            })
+            .AddHttpClientInstrumentation(options =>
+            {
+                options.RecordException = true;
+            })
+            // MassTransit's ActivitySource: publish/send/consume spans for the saga messages.
+            .AddSource("MassTransit");
+
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(otlpEndpoint);
+            });
+        }
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerDocumentation();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddSingleton<IServiceOrderMetrics, PrometheusServiceOrderMetrics>();
+builder.Services.AddHostedService<ServiceOrderMetricsRefreshService>();
+builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
 builder.Services.AddControllers(options =>
 {
@@ -30,6 +69,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<GatewayKeyMiddleware>();
+app.UseHttpMetrics();
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>
@@ -55,6 +99,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapMetrics().AllowAnonymous();
 app.MapControllers();
 
 app.Lifetime.ApplicationStarted.Register(() =>

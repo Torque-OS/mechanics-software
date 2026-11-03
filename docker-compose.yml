@@ -15,6 +15,22 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      # Dedicated user instead of guest/guest, so local credentials match RABBITMQ_USERNAME and
+      # RABBITMQ_PASSWORD in appsettings.Development.json and env.example.
+      RABBITMQ_DEFAULT_USER: mechanics
+      RABBITMQ_DEFAULT_PASS: mechanics
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
     ports:
@@ -23,8 +39,14 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=mechanics_software;Username=postgres;Password=postgres
       - JWT_SECRET=dev-secret-change-in-production-min-32-chars!!
+      - GATEWAY_KEY=${GATEWAY_KEY:-}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USERNAME=mechanics
+      - RABBITMQ_PASSWORD=mechanics
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
 volumes:

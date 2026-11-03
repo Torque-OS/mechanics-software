@@ -1,5 +1,7 @@
+using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MechanicsSoftware.Infrastructure.Persistence;
@@ -17,7 +19,7 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
             .WithPassword("postgres")
             .Build();
 
-    private const string _jwtSecret = "test-secret-key-for-testing-only-min-32-chars-required-here";
+    public const string JwtSecret = "test-secret-key-for-testing-only-min-32-chars-required-here";
 
     public async Task InitializeAsync()
     {
@@ -45,15 +47,22 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
                 options.UseNpgsql(_container.GetConnectionString()));
         });
 
+        // Swaps the RabbitMQ transport for MassTransit's in-memory test harness. The EF Core
+        // outbox stays enabled, so published messages still go through the outbox tables.
+        builder.ConfigureTestServices(services => services.AddMassTransitTestHarness());
+
         builder.UseEnvironment("Test");
 
-        Environment.SetEnvironmentVariable("JWT_SECRET", _jwtSecret);
+        Environment.SetEnvironmentVariable("JWT_SECRET", JwtSecret);
         Environment.SetEnvironmentVariable("JWT_EXPIRATION_MINUTES", "60");
         Environment.SetEnvironmentVariable("SMTP_HOST", "localhost");
         Environment.SetEnvironmentVariable("SMTP_PORT", "1025");
         Environment.SetEnvironmentVariable("SMTP_USER", "test@example.com");
         Environment.SetEnvironmentVariable("SMTP_PASS", "test-password");
         Environment.SetEnvironmentVariable("SMTP_FROM", "noreply@mechanics-software.test");
+        Environment.SetEnvironmentVariable("RABBITMQ_HOST", "localhost");
+        Environment.SetEnvironmentVariable("RABBITMQ_USERNAME", "test");
+        Environment.SetEnvironmentVariable("RABBITMQ_PASSWORD", "test");
     }
 
     public async Task ResetDatabaseAsync()
@@ -79,7 +88,6 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
                 stock_movements,
                 part_items,
                 service_items,
-                budgets,
                 service_orders,
                 vehicles,
                 customers,

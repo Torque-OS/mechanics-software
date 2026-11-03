@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
+using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 using MechanicsSoftware.Domain.Entities;
 using MechanicsSoftware.Domain.Enums;
 using MechanicsSoftware.Domain.Exceptions;
@@ -18,19 +19,25 @@ public class StatusChangeEmailNotificationTests
     private static ServiceOrder NewOrder(Guid customerId) =>
         ServiceOrder.Create(Guid.NewGuid(), customerId, Guid.NewGuid());
 
-    private static ServiceOrder OrderInDiagnosisWithBudget(Guid customerId)
+    private static ServiceOrder OrderInDiagnosis(Guid customerId)
     {
         var order = NewOrder(customerId);
         order.StartDiagnosis();
         order.AddServiceItem(Guid.NewGuid(), "Oil Change", new Money(5000), 1);
-        order.GenerateBudget();
         return order;
     }
 
     private static ServiceOrder OrderAwaitingApproval(Guid customerId)
     {
-        var order = OrderInDiagnosisWithBudget(customerId);
-        order.SendBudget();
+        var order = OrderInDiagnosis(customerId);
+        order.AttachBudget(Guid.NewGuid(), new Money(5000));
+        return order;
+    }
+
+    private static ServiceOrder OrderAwaitingPayment(Guid customerId)
+    {
+        var order = OrderAwaitingApproval(customerId);
+        order.ConfirmBudgetApproval();
         return order;
     }
 
@@ -59,20 +66,20 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task SendBudget_Success_NotifiesWithCorrectParameters()
+    public async Task BudgetGenerated_Success_NotifiesWithCorrectParameters()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
         var customer = BuildCustomer(customerId);
         db.Customers.Add(customer);
-        var order = OrderInDiagnosisWithBudget(customerId);
+        var order = OrderInDiagnosis(customerId);
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        await new SendBudgetHandler(db, emailNotifier.Object, HandlerStubs.Logger<SendBudgetHandler>())
-            .ExecuteAsync(order.Id);
+        await new BudgetGeneratedHandler(db, emailNotifier.Object, HandlerStubs.Logger<BudgetGeneratedHandler>())
+            .ExecuteAsync(order.Id, Guid.NewGuid(), 5000);
 
         emailNotifier.Verify(e => e.SendStatusChangedAsync(
             customer.Email.Value,
@@ -83,19 +90,19 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task Approve_Success_NotifiesWithCorrectParameters()
+    public async Task PaymentConfirmed_Success_NotifiesWithCorrectParameters()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
         var customer = BuildCustomer(customerId);
         db.Customers.Add(customer);
-        var order = OrderAwaitingApproval(customerId);
+        var order = OrderAwaitingPayment(customerId);
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        await new ApproveServiceOrderHandler(db, emailNotifier.Object, HandlerStubs.Logger<ApproveServiceOrderHandler>())
+        await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         emailNotifier.Verify(e => e.SendStatusChangedAsync(
@@ -133,12 +140,12 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task SendBudget_NotifierThrows_StatusStillPersisted()
+    public async Task BudgetGenerated_NotifierThrows_StatusStillPersisted()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
         db.Customers.Add(BuildCustomer(customerId));
-        var order = OrderInDiagnosisWithBudget(customerId);
+        var order = OrderInDiagnosis(customerId);
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
@@ -149,8 +156,8 @@ public class StatusChangeEmailNotificationTests
                 It.IsAny<ServiceOrderStatus.Status>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
 
-        var act = async () => await new SendBudgetHandler(db, emailNotifier.Object, HandlerStubs.Logger<SendBudgetHandler>())
-            .ExecuteAsync(order.Id);
+        var act = async () => await new BudgetGeneratedHandler(db, emailNotifier.Object, HandlerStubs.Logger<BudgetGeneratedHandler>())
+            .ExecuteAsync(order.Id, Guid.NewGuid(), 5000);
 
         await act.Should().NotThrowAsync();
 
@@ -159,12 +166,12 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task Approve_NotifierThrows_StatusStillPersisted()
+    public async Task PaymentConfirmed_NotifierThrows_StatusStillPersisted()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
         db.Customers.Add(BuildCustomer(customerId));
-        var order = OrderAwaitingApproval(customerId);
+        var order = OrderAwaitingPayment(customerId);
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
@@ -175,7 +182,7 @@ public class StatusChangeEmailNotificationTests
                 It.IsAny<ServiceOrderStatus.Status>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
 
-        var act = async () => await new ApproveServiceOrderHandler(db, emailNotifier.Object, HandlerStubs.Logger<ApproveServiceOrderHandler>())
+        var act = async () => await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         await act.Should().NotThrowAsync();
@@ -207,7 +214,7 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task SendBudget_InvalidTransition_DoesNotNotify()
+    public async Task BudgetGenerated_InvalidTransition_DoesNotNotify()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
@@ -218,8 +225,8 @@ public class StatusChangeEmailNotificationTests
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        var act = async () => await new SendBudgetHandler(db, emailNotifier.Object, HandlerStubs.Logger<SendBudgetHandler>())
-            .ExecuteAsync(order.Id);
+        var act = async () => await new BudgetGeneratedHandler(db, emailNotifier.Object, HandlerStubs.Logger<BudgetGeneratedHandler>())
+            .ExecuteAsync(order.Id, Guid.NewGuid(), 5000);
 
         await act.Should().ThrowAsync<DomainException>();
         emailNotifier.Verify(e => e.SendStatusChangedAsync(
@@ -228,7 +235,7 @@ public class StatusChangeEmailNotificationTests
     }
 
     [Fact]
-    public async Task Approve_InvalidTransition_DoesNotNotify()
+    public async Task PaymentConfirmed_InvalidTransition_DoesNotNotify()
     {
         await using var db = InMemoryDbContextHelper.Create();
         var customerId = Guid.NewGuid();
@@ -239,7 +246,7 @@ public class StatusChangeEmailNotificationTests
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        var act = async () => await new ApproveServiceOrderHandler(db, emailNotifier.Object, HandlerStubs.Logger<ApproveServiceOrderHandler>())
+        var act = async () => await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         await act.Should().ThrowAsync<DomainException>();

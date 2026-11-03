@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MechanicsSoftware.Application.Abstractions;
@@ -19,10 +20,17 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<Part> Parts { get; set; } = null!;
     public DbSet<Service> Services { get; set; } = null!;
     public DbSet<ServiceOrder> ServiceOrders { get; set; } = null!;
+    public DbSet<ServiceOrderStatusHistory> ServiceOrderStatusHistory { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // MassTransit transactional outbox (ADR-011). Table names follow the snake_case
+        // convention of this database; column names are owned by MassTransit and kept as-is.
+        modelBuilder.AddInboxStateEntity(entity => entity.ToTable("inbox_state"));
+        modelBuilder.AddOutboxMessageEntity(entity => entity.ToTable("outbox_message"));
+        modelBuilder.AddOutboxStateEntity(entity => entity.ToTable("outbox_state"));
     }
 
     // Workaround for EF Core 9.0.14 + Npgsql 9.0.4: brand-new owned entities (collection items
@@ -32,6 +40,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ChangeTracker.DetectChanges();
+        RecordServiceOrderStatusChanges();
         PromoteNewOwnedCollectionItems();
         await PromoteNewOwnedScalarsAsync(cancellationToken);
 
@@ -47,6 +56,35 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         }
     }
 
+    private void RecordServiceOrderStatusChanges()
+    {
+        foreach (var entry in ChangeTracker.Entries<ServiceOrder>().ToList())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                AddStatusHistory(entry.Entity, entry.Entity.Status.Value, entry.Entity.CreatedAt);
+                continue;
+            }
+
+            if (entry.State != EntityState.Modified)
+                continue;
+
+            var originalStatus = entry.Property(order => order.Status).OriginalValue;
+            if (originalStatus.Value != entry.Entity.Status.Value)
+                AddStatusHistory(entry.Entity, entry.Entity.Status.Value, DateTime.UtcNow);
+        }
+    }
+
+    private void AddStatusHistory(
+        ServiceOrder order,
+        ServiceOrderStatus.Status status,
+        DateTime enteredAt) =>
+        Set<ServiceOrderStatusHistory>().Add(
+            MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory.Create(
+                order.Id,
+                status,
+                enteredAt));
+
     // Owned-collection items in this domain are append-only (ServiceItems, PartItems,
     // StockMovements). Any Modified entry is therefore a freshly-added item. No DB round-trip.
     private void PromoteNewOwnedCollectionItems()
@@ -60,8 +98,10 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         }
     }
 
-    // Owned scalars (e.g. Budget) ARE mutated after creation (Approve/Reject), so we cannot
-    // blindly flip Modified → Added. A single DB lookup distinguishes new from existing.
+    // Unique owned scalars ARE mutated after creation, so we cannot blindly flip
+    // Modified → Added. A single DB lookup distinguishes new from existing. No entity currently
+    // uses a mutable unique owned scalar (Budget moved to the Billing Service — ADR-010), but
+    // this stays in place for the next one.
     private async Task PromoteNewOwnedScalarsAsync(CancellationToken cancellationToken)
     {
         var candidates = ChangeTracker.Entries()

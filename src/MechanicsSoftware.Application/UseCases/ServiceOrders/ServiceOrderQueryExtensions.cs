@@ -13,7 +13,6 @@ internal static class ServiceOrderQueryExtensions
         await query
             .Include(o => o.ServiceItems)
             .Include(o => o.PartItems)
-            .Include(o => o.Budget)
             .FirstOrDefaultAsync(o => o.Id == id, cancellationToken)
         ?? throw new NotFoundException(nameof(ServiceOrder), id);
 }

@@ -43,6 +43,11 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasMaxLength(200)
             .IsRequired();
 
+        builder.Property(c => c.Active)
+            .HasColumnName("active")
+            .HasDefaultValue(true)
+            .IsRequired();
+
         builder.HasIndex(c => c.Document)
             .IsUnique()
             .HasDatabaseName("ix_customers_document");

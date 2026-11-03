@@ -17,57 +17,191 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.14")
+                .HasAnnotation("ProductVersion", "9.0.16")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Auth.User", b =>
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("bigint");
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("email");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
+                    b.Property<DateTime?>("Consumed")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)")
-                        .HasColumnName("password_hash");
+                    b.Property<Guid>("ConsumerId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("role");
+                    b.Property<DateTime?>("Delivered")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpirationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("LastSequenceNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("LockId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReceiveCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Received")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Email")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_email");
+                    b.HasIndex("Delivered");
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("inbox_state", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Customers.Customer", b =>
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
+                {
+                    b.Property<long>("SequenceNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SequenceNumber"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DestinationAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime?>("EnqueueTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpirationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FaultAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Headers")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("InboxConsumerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InboxMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InitiatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("OutboxId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Properties")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResponseAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("SentTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("SequenceNumber");
+
+                    b.HasIndex("EnqueueTime");
+
+                    b.HasIndex("ExpirationTime");
+
+                    b.HasIndex("OutboxId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("outbox_message", (string)null);
+                });
+
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxState", b =>
+                {
+                    b.Property<Guid>("OutboxId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("Delivered")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("LastSequenceNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("LockId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("OutboxId");
+
+                    b.HasIndex("Created");
+
+                    b.ToTable("outbox_state", (string)null);
+                });
+
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("active");
 
                     b.Property<string>("Document")
                         .IsRequired()
@@ -106,7 +240,7 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.ToTable("customers", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Inventory.Part", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Part", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -151,12 +285,55 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.ToTable("parts", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.ServiceOrders.ServiceOrder", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Service", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<int>("BasePrice")
+                        .HasColumnType("integer")
+                        .HasColumnName("base_price");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("EstimatedMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("estimated_minutes");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_services_name");
+
+                    b.ToTable("services", (string)null);
+                });
+
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("BudgetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("budget_id");
+
+                    b.Property<int?>("BudgetTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("budget_total");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
@@ -195,25 +372,46 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.ToTable("service_orders", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Services.Service", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<int>("BasePrice")
-                        .HasColumnType("integer")
-                        .HasColumnName("base_price");
+                    b.Property<DateTime>("EnteredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("entered_at");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("description");
+                    b.Property<Guid>("ServiceOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_order_id");
 
-                    b.Property<int>("EstimatedMinutes")
-                        .HasColumnType("integer")
-                        .HasColumnName("estimated_minutes");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceOrderId", "EnteredAt");
+
+                    b.ToTable("service_order_status_history", (string)null);
+                });
+
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -221,16 +419,28 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("Email")
                         .IsUnique()
-                        .HasDatabaseName("ix_services_name");
+                        .HasDatabaseName("ix_users_email");
 
-                    b.ToTable("services", (string)null);
+                    b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Vehicles.Vehicle", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Vehicle", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -275,12 +485,23 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.ToTable("vehicles", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Inventory.Part", b =>
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
                 {
-                    b.OwnsMany("MechanicsSoftware.Domain.Inventory.StockMovement", "Movements", b1 =>
+                    b.HasOne("MassTransit.EntityFrameworkCoreIntegration.OutboxState", null)
+                        .WithMany()
+                        .HasForeignKey("OutboxId");
+
+                    b.HasOne("MassTransit.EntityFrameworkCoreIntegration.InboxState", null)
+                        .WithMany()
+                        .HasForeignKey("InboxMessageId", "InboxConsumerId")
+                        .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Part", b =>
+                {
+                    b.OwnsMany("MechanicsSoftware.Domain.Entities.StockMovement", "Movements", b1 =>
                         {
                             b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid")
                                 .HasColumnName("id");
 
@@ -319,58 +540,21 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.Navigation("Movements");
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.ServiceOrders.ServiceOrder", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrder", b =>
                 {
-                    b.HasOne("MechanicsSoftware.Domain.Customers.Customer", null)
+                    b.HasOne("MechanicsSoftware.Domain.Entities.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MechanicsSoftware.Domain.Vehicles.Vehicle", null)
+                    b.HasOne("MechanicsSoftware.Domain.Entities.Vehicle", null)
                         .WithMany()
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.OwnsOne("MechanicsSoftware.Domain.ServiceOrders.Budget", "Budget", b1 =>
-                        {
-                            b1.Property<Guid>("Id")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("uuid")
-                                .HasColumnName("id");
-
-                            b1.Property<DateTime>("CreatedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("created_at");
-
-                            b1.Property<Guid>("ServiceOrderId")
-                                .HasColumnType("uuid")
-                                .HasColumnName("service_order_id");
-
-                            b1.Property<string>("Status")
-                                .IsRequired()
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)")
-                                .HasColumnName("status");
-
-                            b1.Property<int>("Total")
-                                .HasColumnType("integer")
-                                .HasColumnName("total");
-
-                            b1.HasKey("Id");
-
-                            b1.HasIndex("ServiceOrderId")
-                                .IsUnique()
-                                .HasDatabaseName("ix_budgets_service_order_id");
-
-                            b1.ToTable("budgets", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("ServiceOrderId");
-                        });
-
-                    b.OwnsMany("MechanicsSoftware.Domain.ServiceOrders.PartItem", "PartItems", b1 =>
+                    b.OwnsMany("MechanicsSoftware.Domain.Entities.PartItem", "PartItems", b1 =>
                         {
                             b1.Property<Guid>("Id")
                                 .ValueGeneratedOnAdd()
@@ -415,7 +599,7 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("ServiceOrderId");
                         });
 
-                    b.OwnsMany("MechanicsSoftware.Domain.ServiceOrders.ServiceItem", "ServiceItems", b1 =>
+                    b.OwnsMany("MechanicsSoftware.Domain.Entities.ServiceItem", "ServiceItems", b1 =>
                         {
                             b1.Property<Guid>("Id")
                                 .ValueGeneratedOnAdd()
@@ -455,16 +639,23 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("ServiceOrderId");
                         });
 
-                    b.Navigation("Budget");
-
                     b.Navigation("PartItems");
 
                     b.Navigation("ServiceItems");
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Vehicles.Vehicle", b =>
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory", b =>
                 {
-                    b.HasOne("MechanicsSoftware.Domain.Customers.Customer", null)
+                    b.HasOne("MechanicsSoftware.Domain.Entities.ServiceOrder", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Vehicle", b =>
+                {
+                    b.HasOne("MechanicsSoftware.Domain.Entities.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)

@@ -10,6 +10,7 @@ public sealed class Customer : Entity<Guid>
     public TaxId Document { get; private set; } = null!;
     public Email Email { get; private set; } = null!;
     public string Phone { get; private set; } = null!;
+    public bool Active { get; private set; } = true;
 
     private Customer() { }
 

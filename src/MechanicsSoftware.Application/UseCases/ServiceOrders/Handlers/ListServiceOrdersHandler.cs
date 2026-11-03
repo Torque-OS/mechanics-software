@@ -14,6 +14,7 @@ public sealed class ListServiceOrdersHandler(IAppDbContext db)
         var delivered = new ServiceOrderStatus(ServiceOrderStatus.Status.Delivered);
         var inExecution = new ServiceOrderStatus(ServiceOrderStatus.Status.InExecution);
         var awaitingApproval = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingApproval);
+        var awaitingPayment = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingPayment);
         var inDiagnosis = new ServiceOrderStatus(ServiceOrderStatus.Status.InDiagnosis);
 
         var orders = db.ServiceOrders
@@ -32,7 +33,8 @@ public sealed class ListServiceOrdersHandler(IAppDbContext db)
         return await orders
             .OrderBy(o => o.Status == inExecution ? 1
                 : o.Status == awaitingApproval ? 2
-                : o.Status == inDiagnosis ? 3 : 4)
+                : o.Status == awaitingPayment ? 3
+                : o.Status == inDiagnosis ? 4 : 5)
             .ThenBy(o => o.CreatedAt)
             .Select(o => new ServiceOrderSummaryResponse(
                 o.Id,

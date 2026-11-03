@@ -3,7 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 
-public sealed class StartExecutionHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<StartExecutionHandler> logger)
+public sealed class StartExecutionHandler(
+    IAppDbContext db,
+    IEmailNotifier emailNotifier,
+    ILogger<StartExecutionHandler> logger,
+    IServiceOrderMetrics? metrics = null)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)

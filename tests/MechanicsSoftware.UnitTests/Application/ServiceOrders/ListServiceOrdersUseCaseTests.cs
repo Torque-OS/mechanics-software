@@ -96,10 +96,11 @@ public class ListServiceOrdersUseCaseTests
         order.StartDiagnosis();
         if (target == ServiceOrderStatus.Status.InDiagnosis) return order;
         order.AddServiceItem(Guid.NewGuid(), "Service", new Money(1_000), 1);
-        order.GenerateBudget();
-        order.SendBudget();
+        order.AttachBudget(Guid.NewGuid(), new Money(1_000));
         if (target == ServiceOrderStatus.Status.AwaitingApproval) return order;
-        order.Approve();
+        order.ConfirmBudgetApproval();
+        if (target == ServiceOrderStatus.Status.AwaitingPayment) return order;
+        order.ConfirmPayment();
         if (target == ServiceOrderStatus.Status.InExecution) return order;
         order.Complete();
         if (target == ServiceOrderStatus.Status.Completed) return order;

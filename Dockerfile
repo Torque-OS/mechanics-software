@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
 COPY MechanicsSoftware.sln .
+COPY src/MechanicsSoftware.Contracts/MechanicsSoftware.Contracts.csproj src/MechanicsSoftware.Contracts/
 COPY src/MechanicsSoftware.Domain/MechanicsSoftware.Domain.csproj src/MechanicsSoftware.Domain/
 COPY src/MechanicsSoftware.Application/MechanicsSoftware.Application.csproj src/MechanicsSoftware.Application/
 COPY src/MechanicsSoftware.Infrastructure/MechanicsSoftware.Infrastructure.csproj src/MechanicsSoftware.Infrastructure/

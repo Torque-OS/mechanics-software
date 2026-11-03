@@ -552,60 +552,6 @@
           }
         },
         {
-          "name": "Generate Budget",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "service-orders", "{{serviceOrderId}}", "budget"]
-            }
-          }
-        },
-        {
-          "name": "Send Budget to Customer",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/send-budget",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "service-orders", "{{serviceOrderId}}", "send-budget"]
-            }
-          }
-        },
-        {
-          "name": "Budget Decision (Approve)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"decision\": \"approve\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/budget-decision",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "service-orders", "{{serviceOrderId}}", "budget-decision"]
-            }
-          }
-        },
-        {
-          "name": "Budget Decision (Reject)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"decision\": \"reject\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/budget-decision",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "service-orders", "{{serviceOrderId}}", "budget-decision"]
-            }
-          }
-        },
-        {
           "name": "Start Execution",
           "request": {
             "method": "POST",

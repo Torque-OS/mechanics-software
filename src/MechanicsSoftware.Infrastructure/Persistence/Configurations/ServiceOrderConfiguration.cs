@@ -96,27 +96,13 @@ public sealed class ServiceOrderConfiguration : IEntityTypeConfiguration<Service
             pi.Ignore(p => p.Total);
         });
 
-        builder.OwnsOne(so => so.Budget, budget =>
-        {
-            budget.ToTable("budgets");
-            budget.HasKey(b => b.Id);
-            budget.Property(b => b.Id).HasColumnName("id");
-            budget.WithOwner().HasForeignKey(b => b.ServiceOrderId);
-            budget.Property(b => b.ServiceOrderId).HasColumnName("service_order_id");
-            budget.HasIndex(b => b.ServiceOrderId).IsUnique().HasDatabaseName("ix_budgets_service_order_id");
-            budget.Property(b => b.Total)
-                .HasConversion(m => m.Cents, m => new Money(m))
-                .HasColumnName("total")
-                .IsRequired();
-            budget.Property(b => b.Status)
-                .HasConversion(
-                    v => v.ToString(),
-                    v => ParseBudgetStatus(v))
-                .HasColumnName("status")
-                .HasMaxLength(20)
-                .IsRequired();
-            budget.Property(b => b.CreatedAt).HasColumnName("created_at").IsRequired();
-        });
+        // Budget is owned by the Billing Service (ADR-010); we keep only a reference.
+        builder.Property(so => so.BudgetId)
+            .HasColumnName("budget_id");
+
+        builder.Property(so => so.BudgetTotal)
+            .HasConversion(m => m == null ? (int?)null : m.Cents, v => v == null ? null : new Money(v.Value))
+            .HasColumnName("budget_total");
 
         builder.HasIndex(so => so.CustomerId).HasDatabaseName("ix_service_orders_customer_id");
         builder.HasIndex(so => so.VehicleId).HasDatabaseName("ix_service_orders_vehicle_id");
@@ -137,26 +123,15 @@ public sealed class ServiceOrderConfiguration : IEntityTypeConfiguration<Service
         ["RECEIVED"]          = ServiceOrderStatus.Status.Received,
         ["IN_DIAGNOSIS"]      = ServiceOrderStatus.Status.InDiagnosis,
         ["AWAITING_APPROVAL"] = ServiceOrderStatus.Status.AwaitingApproval,
+        ["AWAITING_PAYMENT"]  = ServiceOrderStatus.Status.AwaitingPayment,
         ["IN_EXECUTION"]      = ServiceOrderStatus.Status.InExecution,
         ["COMPLETED"]         = ServiceOrderStatus.Status.Completed,
         ["DELIVERED"]         = ServiceOrderStatus.Status.Delivered,
         ["CANCELLED"]         = ServiceOrderStatus.Status.Cancelled,
     };
 
-    private static readonly Dictionary<string, BudgetStatus.Status> _budgetStatusMap = new()
-    {
-        ["PENDING"]  = BudgetStatus.Status.Pending,
-        ["APPROVED"] = BudgetStatus.Status.Approved,
-        ["REJECTED"] = BudgetStatus.Status.Rejected,
-    };
-
     internal static ServiceOrderStatus ParseOrderStatus(string value) =>
         _orderStatusMap.TryGetValue(value, out var status)
             ? new ServiceOrderStatus(status)
             : throw new InvalidOperationException($"Unknown service order status: '{value}'");
-
-    internal static BudgetStatus ParseBudgetStatus(string value) =>
-        _budgetStatusMap.TryGetValue(value, out var status)
-            ? new BudgetStatus(status)
-            : throw new InvalidOperationException($"Unknown budget status: '{value}'");
 }
