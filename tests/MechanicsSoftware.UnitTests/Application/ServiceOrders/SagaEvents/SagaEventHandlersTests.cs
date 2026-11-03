@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.Exceptions;
+using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 using MechanicsSoftware.Domain.Entities;
 using MechanicsSoftware.Domain.Enums;
@@ -159,4 +160,145 @@ public class SagaEventHandlersTests
 
         result.Status.Should().Be("CANCELLED");
     }
+
+    private static ServiceOrder OrderInExecution()
+    {
+        var order = OrderAwaitingPayment();
+        order.ConfirmPayment();
+        return order;
+    }
+
+    [Fact]
+    public async Task BudgetGeneratedHandler_SameBudgetTwice_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingApproval();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new BudgetGeneratedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<BudgetGeneratedHandler>())
+            .ExecuteAsync(order.Id, order.BudgetId!.Value, 5_000);
+
+        result.Status.Should().Be("AWAITING_APPROVAL");
+        result.BudgetId.Should().Be(order.BudgetId);
+    }
+
+    [Fact]
+    public async Task BudgetApprovedHandler_AlreadyAwaitingPayment_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new BudgetApprovedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<BudgetApprovedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("AWAITING_PAYMENT");
+    }
+
+    [Fact]
+    public async Task PaymentConfirmedHandler_AlreadyInExecution_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderInExecution();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("IN_EXECUTION");
+    }
+
+    [Fact]
+    public async Task BudgetRejectedHandler_FromInDiagnosis_Cancels()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        order.StartDiagnosis();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new BudgetRejectedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<BudgetRejectedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task BudgetRejectedHandler_AlreadyCancelled_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingApproval();
+        order.Cancel();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new BudgetRejectedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<BudgetRejectedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task PaymentFailedHandler_AlreadyCancelled_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        order.Cancel();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new PaymentFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task ExecutionFailedHandler_AlreadyCancelled_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderInExecution();
+        order.Cancel();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new ExecutionFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task ExecutionCompletedHandler_FromInExecution_Completes()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderInExecution();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await NewExecutionCompletedHandler(db).ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("COMPLETED");
+    }
+
+    [Fact]
+    public async Task ExecutionCompletedHandler_AlreadyCompleted_IsIdempotent()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderInExecution();
+        order.Complete();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await NewExecutionCompletedHandler(db).ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("COMPLETED");
+    }
+
+    private static ExecutionCompletedHandler NewExecutionCompletedHandler(IAppDbContext db) =>
+        new(db, new CompleteServiceOrderHandler(
+            db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<CompleteServiceOrderHandler>()));
 }
