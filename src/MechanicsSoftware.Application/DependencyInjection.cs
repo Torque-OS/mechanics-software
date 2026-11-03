@@ -62,9 +62,8 @@ public static class DependencyInjection
         services.AddScoped<GetAverageExecutionTimeHandler>();
         services.AddScoped<GetDailyServiceOrderVolumeHandler>();
 
-        // Service Orders — Saga event handlers (ADR-011). Not yet wired to a message consumer
-        // (broker provisioning is F4-08, MassTransit wiring is F4-13); registered here so the
-        // saga-side domain logic is exercised by tests ahead of that infrastructure.
+        // Service Orders — Saga event handlers (ADR-011), invoked by the MassTransit consumers in
+        // Infrastructure/Messaging/Consumers (F4-12).
         services.AddScoped<BudgetGeneratedHandler>();
         services.AddScoped<BudgetApprovedHandler>();
         services.AddScoped<BudgetRejectedHandler>();

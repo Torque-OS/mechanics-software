@@ -91,7 +91,8 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
 
     // Budget generation, sending and approval/rejection moved to the Billing Service (ADR-010).
     // The OS Service now reacts to BudgetGenerated/BudgetApproved/BudgetRejected saga events
-    // instead of exposing these as its own endpoints — see Handlers/SagaEvents and F4-13.
+    // instead of exposing these as its own endpoints — see Handlers/SagaEvents and the MassTransit
+    // consumers in Infrastructure/Messaging/Consumers (F4-12).
 
     [HttpPost("{id:guid}/start-execution")]
     [Authorize(Policy = Policies.Staff)]

@@ -5,10 +5,9 @@ using Microsoft.Extensions.Logging;
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 
 /// <summary>
-/// Reacts to the <c>BudgetGenerated</c> event published by the Billing Service (ADR-011).
-/// Will be invoked by a MassTransit consumer once messaging is wired (F4-13); exposed here as a
-/// plain handler so the OS Service domain and persistence side of the saga can be built and
-/// tested independently of the broker (F4-08).
+/// Reacts to the <c>BudgetGenerated</c> event published by the Billing Service (ADR-011), invoked
+/// by <c>BudgetGeneratedConsumer</c> (F4-12). Kept as a plain handler so the saga side of the OS
+/// Service can be tested without the broker.
 /// </summary>
 public sealed class BudgetGeneratedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<BudgetGeneratedHandler> logger)
 {
