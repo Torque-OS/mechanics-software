@@ -8,7 +8,6 @@ using System.Text.Json;
 using FluentAssertions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
-using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.IntegrationTests.Base;
 using MechanicsSoftware.IntegrationTests.Fixtures;
 using MechanicsSoftware.Infrastructure.Persistence;
@@ -18,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using MechanicsSoftware.Domain.Authorization;
 using MechanicsSoftware.Domain.Enums;
+using TorqueOS.Contracts.ServiceOrders;
 
 namespace MechanicsSoftware.IntegrationTests.Features.ServiceOrders;
 

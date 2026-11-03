@@ -5,7 +5,6 @@ using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Commands;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Queries;
-using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.UnitTests.Helpers;
 using MechanicsSoftware.Domain.Entities;
 using MechanicsSoftware.Domain.ValueObjects;
@@ -13,6 +12,7 @@ using MechanicsSoftware.Domain.Enums;
 using MechanicsSoftware.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Moq;
+using TorqueOS.Contracts.ServiceOrders;
 
 namespace MechanicsSoftware.UnitTests.Application.ServiceOrders;
 

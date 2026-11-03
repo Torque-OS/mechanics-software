@@ -1,7 +1,7 @@
 using MassTransit;
-using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.Infrastructure.Messaging;
 using Moq;
+using TorqueOS.Contracts.ServiceOrders;
 
 namespace MechanicsSoftware.UnitTests.Infrastructure;
 

@@ -97,7 +97,7 @@ ADR-010 (divisão), ADR-011 (saga + mensageria), ADR-012 (bancos), ADR-007 (API 
 
 ### Payloads
 
-Os contratos ficam no projeto `MechanicsSoftware.Contracts` (namespace `MechanicsSoftware.Contracts.Events`). Os demais serviços devem usar **o mesmo namespace e nome de tipo**, pois o MassTransit identifica a mensagem por eles.
+Cada serviço publica seus contratos no namespace `TorqueOS.Contracts.<Serviço>`: os do OS Service ficam no projeto `MechanicsSoftware.Contracts` (namespace `TorqueOS.Contracts.ServiceOrders`) e os do Billing em `TorqueOS.Contracts.Billing`. Quem consome deve usar **o mesmo namespace e nome de tipo** de quem publica, pois o MassTransit identifica a mensagem por eles (`urn:message:<namespace>:<tipo>`).
 
 | Mensagem | Campos |
 |---|---|

@@ -1,9 +1,9 @@
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.Exceptions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Commands;
-using MechanicsSoftware.Contracts.Events;
 using MechanicsSoftware.Domain.Entities;
 using Microsoft.Extensions.Logging;
+using TorqueOS.Contracts.ServiceOrders;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 
