@@ -14,7 +14,7 @@ public sealed class ServiceOrder : Entity<Guid>
     public ServiceOrderStatus Status { get; private set; } = null!;
 
     // Budget is owned by the Billing Service (ADR-010); the OS Service keeps only a reference,
-    // populated from the BudgetGenerated event (see AttachBudget / F4-13).
+    // populated from the BudgetGenerated event (see AttachBudget / F4-12).
     public Guid? BudgetId { get; private set; }
     public Money? BudgetTotal { get; private set; }
     public DateTime CreatedAt { get; private set; }
