@@ -18,8 +18,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     environment:
-      # The default guest user only accepts connections from localhost, so the api container
-      # needs a dedicated user.
+      # Dedicated user instead of guest/guest, so local credentials match RABBITMQ_USERNAME and
+      # RABBITMQ_PASSWORD in appsettings.Development.json and env.example.
       RABBITMQ_DEFAULT_USER: mechanics
       RABBITMQ_DEFAULT_PASS: mechanics
     ports:
