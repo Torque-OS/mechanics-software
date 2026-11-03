@@ -1,4 +1,5 @@
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
@@ -13,6 +14,10 @@ public sealed class PaymentConfirmedHandler(IAppDbContext db, IEmailNotifier ema
         Guid serviceOrderId, CancellationToken cancellationToken = default)
     {
         var order = await db.ServiceOrders.FindFullAsync(serviceOrderId, cancellationToken);
+
+        // Idempotent: a redelivered or duplicated event finds the order already in execution.
+        if (order.Status.Is(ServiceOrderStatus.Status.InExecution))
+            return ServiceOrderResponse.From(order);
 
         order.ConfirmPayment();
 

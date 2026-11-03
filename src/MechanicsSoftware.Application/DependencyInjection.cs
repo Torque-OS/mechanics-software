@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<PaymentConfirmedHandler>();
         services.AddScoped<PaymentFailedHandler>();
         services.AddScoped<ExecutionFailedHandler>();
+        services.AddScoped<ExecutionCompletedHandler>();
 
         return services;
     }

@@ -17,6 +17,10 @@ public sealed class BudgetGeneratedHandler(IAppDbContext db, IEmailNotifier emai
     {
         var order = await db.ServiceOrders.FindFullAsync(serviceOrderId, cancellationToken);
 
+        // Idempotent: a redelivered or duplicated event finds this budget already attached.
+        if (order.BudgetId == budgetId)
+            return ServiceOrderResponse.From(order);
+
         order.AttachBudget(budgetId, new Money(budgetTotalInCents));
 
         await db.SaveChangesAsync(cancellationToken);
