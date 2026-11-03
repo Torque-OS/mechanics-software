@@ -45,10 +45,18 @@ public static class MessagingSetup
                 outbox.UseBusOutbox();
             });
 
-            // Inbox on every consumer endpoint: a message already consumed (same MessageId, kept in
-            // inbox_state) is skipped, so a broker redelivery never runs the handler twice.
+            // On every consumer endpoint:
+            // - Retry: the inbox runs each message in a repeatable-read transaction, so two events for
+            //   the same order consumed at once make PostgreSQL abort one of them (serialization
+            //   failure). Retrying lets it re-read the order and hit the handler's idempotency guard.
+            //   Backoff and DLQ alerts are F4-24.
+            // - Inbox: a message already consumed (same MessageId, kept in inbox_state) is skipped,
+            //   so a broker redelivery never runs the handler twice.
             bus.AddConfigureEndpointsCallback((context, _, endpoint) =>
-                endpoint.UseEntityFrameworkOutbox<AppDbContext>(context));
+            {
+                endpoint.UseMessageRetry(retry => retry.Intervals(100, 500, 1000));
+                endpoint.UseEntityFrameworkOutbox<AppDbContext>(context);
+            });
 
             // A broker outage must not make /health fail: the readiness/liveness probes would
             // restart the pods, while the outbox already keeps messages until RabbitMQ is back.
