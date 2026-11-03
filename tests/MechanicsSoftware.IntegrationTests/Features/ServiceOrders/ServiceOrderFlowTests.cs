@@ -17,15 +17,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using MechanicsSoftware.Domain.Authorization;
 using MechanicsSoftware.Domain.Enums;
+using MassTransit;
+using TorqueOS.Contracts.Billing;
+using TorqueOS.Contracts.Execution;
 using TorqueOS.Contracts.ServiceOrders;
 
 namespace MechanicsSoftware.IntegrationTests.Features.ServiceOrders;
 
 // Budget generation, sending and approval/rejection are now owned by the Billing Service
-// (ADR-010) and reach the OS Service as saga events (ADR-011). Until the broker and MassTransit
-// consumers are wired (F4-08, F4-13), these tests simulate the events by invoking the same
-// saga-event handlers a consumer will call, via the app's own DI container — everything else
-// still goes through real HTTP calls against the running API.
+// (ADR-010) and reach the OS Service as saga events (ADR-011). Most flow tests simulate those
+// events by invoking the saga-event handlers through the app's own DI container; the
+// "*ThroughBroker" tests publish the real contracts on the MassTransit test harness instead, so the
+// consumers (F4-12) are exercised end to end. Everything else goes through real HTTP calls.
 [Collection("IntegrationTests")]
 public sealed class ServiceOrderFlowTests : IntegrationTestBase
 {
@@ -234,6 +237,91 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         published.OpenedAt.Kind.Should().Be(DateTimeKind.Utc);
     }
 
+    [Fact]
+    public async Task HappyPath_ThroughBroker_DrivesOrderToCompletedAndRecordsHistory()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        var bus = Factory.Services.GetTestHarness().Bus;
+        var budgetId = Guid.NewGuid();
+
+        await bus.Publish(new BudgetGenerated(orderId, budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_APPROVAL");
+
+        await bus.Publish(new BudgetApproved(orderId, budgetId, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_PAYMENT");
+
+        await bus.Publish(new PaymentConfirmed(orderId, Guid.NewGuid(), budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "IN_EXECUTION");
+
+        await bus.Publish(new ExecutionCompleted(orderId, Guid.NewGuid(), DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "COMPLETED");
+
+        var response = await client.GetAsync($"/api/service-orders/{orderId}/history");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var history = await ReadAsync<ServiceOrderHistoryResponse>(response);
+
+        history.CurrentStatus.Should().Be("COMPLETED");
+        history.History.Select(entry => entry.Status).Should().Equal(
+            "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "AWAITING_PAYMENT", "IN_EXECUTION", "COMPLETED");
+    }
+
+    [Fact]
+    public async Task BudgetFailed_ThroughBroker_CancelsOrderInDiagnosis()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+
+        await Factory.Services.GetTestHarness().Bus
+            .Publish(new BudgetFailed(orderId, "A budget requires at least one service item.", DateTime.UtcNow));
+
+        await WaitForStatusAsync(client, orderId, "CANCELLED");
+    }
+
+    [Fact]
+    public async Task DuplicatePaymentConfirmed_ThroughBroker_IsIgnoredWithoutFault()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        var harness = Factory.Services.GetTestHarness();
+        var budgetId = Guid.NewGuid();
+
+        await harness.Bus.Publish(new BudgetGenerated(orderId, budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_APPROVAL");
+        await harness.Bus.Publish(new BudgetApproved(orderId, budgetId, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_PAYMENT");
+
+        // Two distinct messages for the same payment, as a racing webhook + verify could produce. They
+        // are consumed concurrently: one wins, the other is retried and hits the idempotency guard.
+        await harness.Bus.Publish(new PaymentConfirmed(orderId, Guid.NewGuid(), budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await harness.Bus.Publish(new PaymentConfirmed(orderId, Guid.NewGuid(), budgetId, ServicePriceInCents, DateTime.UtcNow));
+
+        await WaitForStatusAsync(client, orderId, "IN_EXECUTION");
+        (await harness.Consumed.Any<PaymentConfirmed>(m => m.Context.Message.ServiceOrderId == orderId)).Should().BeTrue();
+        (await harness.Published.Any<Fault<PaymentConfirmed>>(m => m.Context.Message.Message.ServiceOrderId == orderId))
+            .Should().BeFalse("a repeated event must be ignored, not sent to the error queue");
+    }
+
+    [Fact]
+    public async Task ExecutionFailed_ThroughBroker_CancelsOrderInExecution()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        var bus = Factory.Services.GetTestHarness().Bus;
+        var budgetId = Guid.NewGuid();
+
+        await bus.Publish(new BudgetGenerated(orderId, budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_APPROVAL");
+        await bus.Publish(new BudgetApproved(orderId, budgetId, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "AWAITING_PAYMENT");
+        await bus.Publish(new PaymentConfirmed(orderId, Guid.NewGuid(), budgetId, ServicePriceInCents, DateTime.UtcNow));
+        await WaitForStatusAsync(client, orderId, "IN_EXECUTION");
+
+        await bus.Publish(new ExecutionFailed(orderId, Guid.NewGuid(), "Part unavailable.", DateTime.UtcNow));
+
+        await WaitForStatusAsync(client, orderId, "CANCELLED");
+    }
+
     // ========================================================================
     // Helper Methods
     // ========================================================================
@@ -392,8 +480,8 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    // Stands in for the future BudgetGenerated/BudgetApproved/PaymentConfirmed/BudgetRejected
-    // MassTransit consumers (F4-13) by invoking the same handlers directly.
+    // Invokes the same handlers as the BudgetGenerated/BudgetApproved/PaymentConfirmed/BudgetRejected
+    // consumers (F4-12) directly, for tests that are not about the messaging itself.
     private async Task<ServiceOrderResponse> SimulateBudgetGeneratedAsync(Guid orderId, int totalInCents)
     {
         await using var scope = Factory.Services.CreateAsyncScope();
@@ -444,6 +532,38 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             $"/api/service-orders/{orderId}/deliver", new { });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<Guid> OrderInDiagnosisWithServiceAsync(HttpClient client)
+    {
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var serviceId = await CreateServiceAsync(client);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        await StartDiagnosisAsync(client, orderId);
+        await AddServiceItemAsync(client, orderId, serviceId);
+
+        return orderId;
+    }
+
+    // Consumers run asynchronously after Publish returns, so the status is polled until it changes.
+    private static async Task WaitForStatusAsync(HttpClient client, Guid orderId, string expectedStatus)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        string? current = null;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var response = await client.GetAsync($"/api/service-orders/{orderId}/status");
+            current = (await ReadAsync<ServiceOrderStatusDto>(response)).Status;
+            if (current == expectedStatus)
+                return;
+
+            await Task.Delay(100);
+        }
+
+        current.Should().Be(expectedStatus, "the consumer should have applied the saga event");
     }
 
     private static async Task AssertOrderStatusAsync(
