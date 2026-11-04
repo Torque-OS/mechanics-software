@@ -38,13 +38,15 @@ builder.Services.AddOpenTelemetry()
             // MassTransit's ActivitySource: publish/send/consume spans for the saga messages.
             .AddSource("MassTransit");
 
+        // No options callback: letting AddOtlpExporter() read OTEL_EXPORTER_OTLP_ENDPOINT/
+        // OTEL_EXPORTER_OTLP_PROTOCOL itself is what makes it append the per-signal path
+        // (/v1/traces) to the endpoint. Setting options.Endpoint here ourselves would
+        // overwrite that already-suffixed URI with the bare host, which the collector
+        // 404s on — silently, since OTel's own export failures aren't logged by default.
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
         if (!string.IsNullOrWhiteSpace(otlpEndpoint))
         {
-            tracing.AddOtlpExporter(options =>
-            {
-                options.Endpoint = new Uri(otlpEndpoint);
-            });
+            tracing.AddOtlpExporter();
         }
     });
 
