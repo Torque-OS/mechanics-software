@@ -43,6 +43,15 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USERNAME=mechanics
       - RABBITMQ_PASSWORD=mechanics
+      # SMTP is resolved eagerly for every controller that injects a status-change email
+      # handler, so without these ANY service-order endpoint 500s, not just email sending.
+      # Local dev only — points nowhere real, which is fine since SmtpEmailNotifier swallows
+      # send failures (TrySendStatusEmailAsync) and only needs to construct successfully.
+      - SMTP_HOST=${SMTP_HOST:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-dev@example.com}
+      - SMTP_PASS=${SMTP_PASS:-dev-password}
+      - SMTP_FROM=${SMTP_FROM:-noreply@mechanics-software.local}
     depends_on:
       db:
         condition: service_healthy

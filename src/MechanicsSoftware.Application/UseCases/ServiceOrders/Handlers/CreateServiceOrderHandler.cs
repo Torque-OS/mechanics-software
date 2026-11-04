@@ -30,7 +30,8 @@ public sealed class CreateServiceOrderHandler(
         // stores the message in the same transaction as the order, so both are saved or neither is.
         await eventPublisher.PublishAsync(
             new ServiceOrderOpened(order.Id, order.CustomerId, order.VehicleId, order.CreatedAt),
-            cancellationToken);
+            correlationId: order.Id,
+            cancellationToken: cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
 

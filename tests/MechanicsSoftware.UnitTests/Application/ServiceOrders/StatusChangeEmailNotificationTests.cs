@@ -102,7 +102,7 @@ public class StatusChangeEmailNotificationTests
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
+        await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         emailNotifier.Verify(e => e.SendStatusChangedAsync(
@@ -182,7 +182,7 @@ public class StatusChangeEmailNotificationTests
                 It.IsAny<ServiceOrderStatus.Status>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
 
-        var act = async () => await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
+        var act = async () => await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         await act.Should().NotThrowAsync();
@@ -246,7 +246,7 @@ public class StatusChangeEmailNotificationTests
 
         var emailNotifier = new Mock<IEmailNotifier>();
 
-        var act = async () => await new PaymentConfirmedHandler(db, emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
+        var act = async () => await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), emailNotifier.Object, HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         await act.Should().ThrowAsync<DomainException>();

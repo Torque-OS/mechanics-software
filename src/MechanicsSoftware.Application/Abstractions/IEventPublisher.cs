@@ -17,7 +17,12 @@ namespace MechanicsSoftware.Application.Abstractions
     /// </remarks>
     public interface IEventPublisher
     {
-        Task PublishAsync<TEvent>(TEvent integrationEvent, CancellationToken cancellationToken = default)
+        /// <param name="correlationId">
+        /// The Saga correlation key (ADR-011) — the <c>ServiceOrderId</c> for every message in
+        /// this flow. Left null only for messages with no natural correlation.
+        /// </param>
+        Task PublishAsync<TEvent>(
+            TEvent integrationEvent, Guid? correlationId = null, CancellationToken cancellationToken = default)
             where TEvent : class;
     }
 }
