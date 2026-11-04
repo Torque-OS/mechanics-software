@@ -16,9 +16,10 @@ using TorqueOS.Contracts.Execution;
 namespace MechanicsSoftware.UnitTests.Infrastructure;
 
 /// <summary>
-/// The Saga's happy path (ADR-011, F4-22) end to end in memory: each Billing/Execution event in,
-/// the order's status updated. Retry, inbox and outbox (the <c>*ConsumerDefinition</c> classes)
-/// need PostgreSQL and RabbitMQ and are checked against the compose stack.
+/// The Saga's happy path (ADR-011, F4-22) and compensation path (F4-23) end to end in memory:
+/// each Billing/Execution event in, the order's status (and any outward compensation command)
+/// updated. Retry, inbox and outbox (the <c>*ConsumerDefinition</c> classes) need PostgreSQL and
+/// RabbitMQ and are checked against the compose stack.
 /// </summary>
 public sealed class SagaConsumersTests : IAsyncLifetime
 {
@@ -37,12 +38,20 @@ public sealed class SagaConsumersTests : IAsyncLifetime
             .AddScoped<BudgetApprovedHandler>()
             .AddScoped<PaymentConfirmedHandler>()
             .AddScoped<ExecutionCompletedHandler>()
+            .AddScoped<BudgetFailedHandler>()
+            .AddScoped<BudgetRejectedHandler>()
+            .AddScoped<PaymentFailedHandler>()
+            .AddScoped<ExecutionFailedHandler>()
             .AddMassTransitTestHarness(bus =>
             {
                 bus.AddConsumer<BudgetGeneratedConsumer>();
                 bus.AddConsumer<BudgetApprovedConsumer>();
                 bus.AddConsumer<PaymentConfirmedConsumer>();
                 bus.AddConsumer<ExecutionCompletedConsumer>();
+                bus.AddConsumer<BudgetFailedConsumer>();
+                bus.AddConsumer<BudgetRejectedConsumer>();
+                bus.AddConsumer<PaymentFailedConsumer>();
+                bus.AddConsumer<ExecutionFailedConsumer>();
             })
             .BuildServiceProvider(true);
         _harness = _provider.GetRequiredService<ITestHarness>();
@@ -136,5 +145,81 @@ public sealed class SagaConsumersTests : IAsyncLifetime
         await using var scope = _provider.CreateAsyncScope();
         var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().ServiceOrders.SingleAsync();
         stored.Status.Value.Should().Be(ServiceOrderStatus.Status.Completed);
+    }
+
+    [Fact]
+    public async Task BudgetFailed_CancelsFromInDiagnosis()
+    {
+        var order = await SeedOrderAsync(o => o.StartDiagnosis());
+
+        await _harness.Bus.Publish(new BudgetFailed(order.Id, "No service item", DateTime.UtcNow));
+
+        (await _harness.Consumed.Any<BudgetFailed>()).Should().BeTrue();
+
+        await using var scope = _provider.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().ServiceOrders.SingleAsync();
+        stored.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public async Task BudgetRejected_CancelsFromAwaitingApproval()
+    {
+        var order = await SeedOrderAsync(o =>
+        {
+            o.StartDiagnosis();
+            o.AttachBudget(Guid.NewGuid(), new Money(5_000));
+        });
+
+        await _harness.Bus.Publish(new BudgetRejected(order.Id, order.BudgetId!.Value, DateTime.UtcNow));
+
+        (await _harness.Consumed.Any<BudgetRejected>()).Should().BeTrue();
+
+        await using var scope = _provider.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().ServiceOrders.SingleAsync();
+        stored.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public async Task PaymentFailed_CancelsAndPublishesCancelBudget()
+    {
+        var order = await SeedOrderAsync(o =>
+        {
+            o.StartDiagnosis();
+            o.AttachBudget(Guid.NewGuid(), new Money(5_000));
+            o.ConfirmBudgetApproval();
+        });
+
+        await _harness.Bus.Publish(new PaymentFailed(order.Id, Guid.NewGuid(), order.BudgetId!.Value, "Card declined", DateTime.UtcNow));
+
+        (await _harness.Consumed.Any<PaymentFailed>()).Should().BeTrue();
+        var published = _harness.Published.Select<CancelBudget>().Single().Context;
+        published.Message.ServiceOrderId.Should().Be(order.Id);
+        published.CorrelationId.Should().Be(order.Id);
+
+        await using var scope = _provider.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().ServiceOrders.SingleAsync();
+        stored.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
+    public async Task ExecutionFailed_CancelsAndPublishesCancelBudget()
+    {
+        var order = await SeedOrderAsync(o =>
+        {
+            o.StartDiagnosis();
+            o.AttachBudget(Guid.NewGuid(), new Money(5_000));
+            o.ConfirmBudgetApproval();
+            o.ConfirmPayment();
+        });
+
+        await _harness.Bus.Publish(new ExecutionFailed(order.Id, Guid.NewGuid(), "Part unavailable", DateTime.UtcNow));
+
+        (await _harness.Consumed.Any<ExecutionFailed>()).Should().BeTrue();
+        var published = _harness.Published.Select<CancelBudget>().Single().Context;
+        published.Message.ServiceOrderId.Should().Be(order.Id);
+
+        await using var scope = _provider.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().ServiceOrders.SingleAsync();
+        stored.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
     }
 }

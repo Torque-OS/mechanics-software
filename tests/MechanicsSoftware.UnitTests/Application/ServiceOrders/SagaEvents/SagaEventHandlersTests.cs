@@ -8,6 +8,7 @@ using MechanicsSoftware.Domain.Exceptions;
 using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.UnitTests.Helpers;
 using Moq;
+using TorqueOS.Contracts.Billing;
 using TorqueOS.Contracts.Execution;
 
 namespace MechanicsSoftware.UnitTests.Application.ServiceOrders.SagaEvents;
@@ -188,7 +189,41 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+        var result = await new PaymentFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task PaymentFailedHandler_ValidOrder_PublishesCancelBudget()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IEventPublisher>();
+
+        await new PaymentFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+            It.Is<CancelBudget>(c => c.ServiceOrderId == order.Id),
+            order.Id,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task BudgetFailedHandler_ValidOrder_Cancels()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        order.StartDiagnosis();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new BudgetFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<BudgetFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
@@ -203,9 +238,29 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new ExecutionFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+        var result = await new ExecutionFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
+    }
+
+    [Fact]
+    public async Task ExecutionFailedHandler_ValidOrder_PublishesCancelBudget()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = OrderAwaitingPayment();
+        order.ConfirmPayment();
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var publisher = new Mock<IEventPublisher>();
+
+        await new ExecutionFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+            It.Is<CancelBudget>(c => c.ServiceOrderId == order.Id),
+            order.Id,
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

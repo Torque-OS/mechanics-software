@@ -32,6 +32,14 @@ public class ServiceOrderStatusTests
     }
 
     [Fact]
+    public void TransitionTo_InDiagnosisToCancelled_Valid()
+    {
+        var status = new ServiceOrderStatus(ServiceOrderStatus.Status.InDiagnosis);
+        var result = status.TransitionTo(ServiceOrderStatus.Status.Cancelled);
+        result.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
     public void TransitionTo_AwaitingApprovalToAwaitingPayment_Valid()
     {
         var status = new ServiceOrderStatus(ServiceOrderStatus.Status.AwaitingApproval);

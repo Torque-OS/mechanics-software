@@ -214,6 +214,14 @@ public class ServiceOrderTests
     }
 
     [Fact]
+    public void Cancel_FromInDiagnosis_StatusIsCancelled()
+    {
+        var order = InDiagnosis();
+        order.Cancel();
+        order.Status.Value.Should().Be(ServiceOrderStatus.Status.Cancelled);
+    }
+
+    [Fact]
     public void Cancel_FromAwaitingApproval_StatusIsCancelled()
     {
         var order = AwaitingApproval();
