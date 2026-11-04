@@ -15,6 +15,7 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     CreateServiceOrderHandler createHandler,
     GetServiceOrderHandler getHandler,
     GetServiceOrderStatusHandler getStatusHandler,
+    GetServiceOrderHistoryHandler historyHandler,
     ListServiceOrdersHandler listHandler,
     StartDiagnosisHandler startDiagnosisHandler,
     AddServiceItemHandler addServiceItemHandler,
@@ -45,6 +46,14 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     public async Task<IActionResult> GetStatus(Guid id, CancellationToken cancellationToken)
     {
         var result = await getStatusHandler.ExecuteAsync(id, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>Status timeline of the order, oldest first — includes the changes driven by saga events.</summary>
+    [HttpGet("{id:guid}/history")]
+    public async Task<IActionResult> GetHistory(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await historyHandler.ExecuteAsync(id, cancellationToken);
         return Ok(result);
     }
 
@@ -82,7 +91,8 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
 
     // Budget generation, sending and approval/rejection moved to the Billing Service (ADR-010).
     // The OS Service now reacts to BudgetGenerated/BudgetApproved/BudgetRejected saga events
-    // instead of exposing these as its own endpoints — see Handlers/SagaEvents and F4-13.
+    // instead of exposing these as its own endpoints — see Handlers/SagaEvents and the MassTransit
+    // consumers in Infrastructure/Messaging/Consumers (F4-12).
 
     [HttpPost("{id:guid}/start-execution")]
     [Authorize(Policy = Policies.Staff)]

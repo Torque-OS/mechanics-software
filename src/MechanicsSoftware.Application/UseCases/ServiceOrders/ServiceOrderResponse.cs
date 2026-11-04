@@ -76,6 +76,17 @@ public sealed record ServiceOrderStatusResponse(
     DateTime? DeliveredAt
 );
 
+public sealed record ServiceOrderHistoryResponse(
+    Guid Id,
+    string CurrentStatus,
+    IReadOnlyList<ServiceOrderStatusHistoryEntry> History
+);
+
+public sealed record ServiceOrderStatusHistoryEntry(
+    string Status,
+    DateTime EnteredAt
+);
+
 public sealed record AddPartItemResponse(
     Guid Id,
     Guid PartId,

@@ -509,6 +509,17 @@
           }
         },
         {
+          "name": "Get Status History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "history"]
+            }
+          }
+        },
+        {
           "name": "Start Diagnosis",
           "request": {
             "method": "POST",

@@ -1,4 +1,5 @@
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
@@ -14,6 +15,10 @@ public sealed class ExecutionFailedHandler(IAppDbContext db, IEmailNotifier emai
         Guid serviceOrderId, CancellationToken cancellationToken = default)
     {
         var order = await db.ServiceOrders.FindFullAsync(serviceOrderId, cancellationToken);
+
+        // Idempotent: a redelivered or duplicated event finds the order already cancelled.
+        if (order.Status.Is(ServiceOrderStatus.Status.Cancelled))
+            return ServiceOrderResponse.From(order);
 
         order.Cancel();
 

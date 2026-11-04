@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using MassTransit;
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Infrastructure.Messaging.Consumers;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,8 @@ namespace MechanicsSoftware.Infrastructure.Messaging;
 [ExcludeFromCodeCoverage]
 public static class MessagingSetup
 {
+    public const string EndpointPrefix = "os-service";
+
     public static IServiceCollection AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         var rabbitMq = RabbitMqSettings.FromConfiguration(configuration);
@@ -19,7 +22,20 @@ public static class MessagingSetup
 
         services.AddMassTransit(bus =>
         {
-            bus.SetKebabCaseEndpointNameFormatter();
+            // Queues are prefixed with the service name ("os-service-budget-generated"): all services
+            // share the broker, and two consumers with the same class name in different services
+            // would otherwise compete on the same queue instead of each getting a copy.
+            bus.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter(EndpointPrefix, false));
+
+            // Saga events from the Billing and Execution services (F4-12).
+            bus.AddConsumer<BudgetGeneratedConsumer>();
+            bus.AddConsumer<BudgetApprovedConsumer>();
+            bus.AddConsumer<BudgetRejectedConsumer>();
+            bus.AddConsumer<BudgetFailedConsumer>();
+            bus.AddConsumer<PaymentConfirmedConsumer>();
+            bus.AddConsumer<PaymentFailedConsumer>();
+            bus.AddConsumer<ExecutionCompletedConsumer>();
+            bus.AddConsumer<ExecutionFailedConsumer>();
 
             // Transactional outbox (ADR-011): published messages are stored in the OS Service
             // database in the same transaction as the entity changes and delivered afterwards.
@@ -27,6 +43,19 @@ public static class MessagingSetup
             {
                 outbox.UsePostgres();
                 outbox.UseBusOutbox();
+            });
+
+            // On every consumer endpoint:
+            // - Retry: the inbox runs each message in a repeatable-read transaction, so two events for
+            //   the same order consumed at once make PostgreSQL abort one of them (serialization
+            //   failure). Retrying lets it re-read the order and hit the handler's idempotency guard.
+            //   Backoff and DLQ alerts are F4-24.
+            // - Inbox: a message already consumed (same MessageId, kept in inbox_state) is skipped,
+            //   so a broker redelivery never runs the handler twice.
+            bus.AddConfigureEndpointsCallback((context, _, endpoint) =>
+            {
+                endpoint.UseMessageRetry(retry => retry.Intervals(100, 500, 1000));
+                endpoint.UseEntityFrameworkOutbox<AppDbContext>(context);
             });
 
             // A broker outage must not make /health fail: the readiness/liveness probes would
