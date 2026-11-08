@@ -1,5 +1,4 @@
 using MechanicsSoftware.Application.Abstractions;
-using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +7,7 @@ namespace MechanicsSoftware.API.Metrics;
 public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
+    IServiceOrderStatusHistoryStore historyStore,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(1);
@@ -31,21 +31,19 @@ public sealed class ServiceOrderMetricsRefreshService(
             var orders = await db.ServiceOrders
                 .Select(order => new
                 {
+                    order.Id,
                     order.CreatedAt,
                     order.CompletedAt,
                     order.Status,
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = await db.ServiceOrderStatusHistory
-                .Select(history => new
-                {
-
-                    history.ServiceOrderId,
-                    history.Status,
-                    history.EnteredAt
-                })
-                .ToListAsync(cancellationToken);
+            var statusHistory = (await Task.WhenAll(
+                orders.Select(order => historyStore.GetAsync(
+                    order.Id,
+                    cancellationToken))))
+                .SelectMany(history => history)
+                .ToList();
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -65,7 +63,7 @@ public sealed class ServiceOrderMetricsRefreshService(
                 orders.LongCount(order => order.CreatedAt >= today),
                 orders.LongCount(order => order.CompletedAt >= today));
 
-            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
+            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "AWAITING_PAYMENT", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
             foreach (var status in statuses)
             {
                 metrics.SetOrderTotalByStatus(
@@ -86,7 +84,7 @@ public sealed class ServiceOrderMetricsRefreshService(
                                 ? historyGroup.OrderBy(item => item.EnteredAt).ElementAt(index + 1).EnteredAt
                                 : DateTime.UtcNow) - history.EnteredAt).TotalHours
                         }))
-                    .Where(history => new ServiceOrderStatus(history.Status).ToString() == status)
+                    .Where(history => history.Status == status)
                     .Select(history => history.Duration)
                     .ToList();
 

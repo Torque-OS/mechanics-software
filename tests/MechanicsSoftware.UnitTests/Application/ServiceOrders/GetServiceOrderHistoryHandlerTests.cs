@@ -24,7 +24,9 @@ public class GetServiceOrderHistoryHandlerTests
         order.AttachBudget(Guid.NewGuid(), new Money(5_000));
         await db.SaveChangesAsync();
 
-        var result = await new GetServiceOrderHistoryHandler(db).ExecuteAsync(order.Id);
+        var result = await new GetServiceOrderHistoryHandler(
+            db,
+            InMemoryDbContextHelper.GetHistoryStore(db)).ExecuteAsync(order.Id);
 
         result.Id.Should().Be(order.Id);
         result.CurrentStatus.Should().Be("AWAITING_APPROVAL");
@@ -38,7 +40,9 @@ public class GetServiceOrderHistoryHandlerTests
     {
         await using var db = InMemoryDbContextHelper.Create();
 
-        var act = async () => await new GetServiceOrderHistoryHandler(db).ExecuteAsync(Guid.NewGuid());
+        var act = async () => await new GetServiceOrderHistoryHandler(
+            db,
+            InMemoryDbContextHelper.GetHistoryStore(db)).ExecuteAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<NotFoundException>();
     }

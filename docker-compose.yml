@@ -31,6 +31,18 @@ services:
       timeout: 5s
       retries: 5
 
+  mongodb:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: .
     ports:
@@ -48,11 +60,17 @@ services:
       - SMTP_USER=${SMTP_USER:-dev@example.com}
       - SMTP_PASS=${SMTP_PASS:-dev-password}
       - SMTP_FROM=${SMTP_FROM:-noreply@mechanics-software.local}
+      - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - MongoDB__DatabaseName=mechanics_software
+      - MongoDB__CollectionName=service_order_status_history
     depends_on:
       db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      mongodb:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  mongodb_data:
