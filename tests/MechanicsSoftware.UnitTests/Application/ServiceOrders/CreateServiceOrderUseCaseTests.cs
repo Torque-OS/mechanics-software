@@ -89,6 +89,7 @@ public class CreateServiceOrderUseCaseTests
                     e.CustomerId == CustomerId &&
                     e.VehicleId == VehicleId &&
                     e.OpenedAt == order!.CreatedAt),
+                result.Id,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -105,7 +106,7 @@ public class CreateServiceOrderUseCaseTests
         var act = async () => await useCase.ExecuteAsync(new CreateServiceOrderCommand(CustomerId, VehicleId));
 
         await act.Should().ThrowAsync<NotFoundException>();
-        publisher.Verify(p => p.PublishAsync(It.IsAny<ServiceOrderOpened>(), It.IsAny<CancellationToken>()), Times.Never);
+        publisher.Verify(p => p.PublishAsync(It.IsAny<ServiceOrderOpened>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -118,7 +119,7 @@ public class CreateServiceOrderUseCaseTests
 
         var publisher = new Mock<IEventPublisher>();
         publisher
-            .Setup(p => p.PublishAsync(It.IsAny<ServiceOrderOpened>(), It.IsAny<CancellationToken>()))
+            .Setup(p => p.PublishAsync(It.IsAny<ServiceOrderOpened>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("outbox unavailable"));
 
         var useCase = new CreateServiceOrderHandler(db, publisher.Object, HandlerStubs.Logger<CreateServiceOrderHandler>());

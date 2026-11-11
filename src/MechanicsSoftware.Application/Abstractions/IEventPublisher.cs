@@ -19,5 +19,8 @@ namespace MechanicsSoftware.Application.Abstractions
     {
         Task PublishAsync<TEvent>(TEvent integrationEvent, CancellationToken cancellationToken = default)
             where TEvent : class;
+
+        Task PublishAsync<TEvent>(TEvent integrationEvent, Guid correlationId, CancellationToken cancellationToken = default)
+            where TEvent : class;
     }
 }

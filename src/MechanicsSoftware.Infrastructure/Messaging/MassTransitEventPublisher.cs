@@ -13,4 +13,8 @@ public sealed class MassTransitEventPublisher(IPublishEndpoint publishEndpoint) 
     public Task PublishAsync<TEvent>(TEvent integrationEvent, CancellationToken cancellationToken = default)
         where TEvent : class =>
         publishEndpoint.Publish(integrationEvent, cancellationToken);
+
+    public Task PublishAsync<TEvent>(TEvent integrationEvent, Guid correlationId, CancellationToken cancellationToken = default)
+        where TEvent : class =>
+        publishEndpoint.Publish(integrationEvent, context => context.CorrelationId = correlationId, cancellationToken);
 }
