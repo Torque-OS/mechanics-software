@@ -124,7 +124,7 @@ public class SagaEventConsumersTests
         await using var db = InMemoryDbContextHelper.Create();
         var order = await SeedAsync(db, AwaitingPayment);
         var consumer = new PaymentConfirmedConsumer(
-            new PaymentConfirmedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>()));
+            new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>()));
 
         await consumer.Consume(Context(new PaymentConfirmed(
             order.Id, Guid.NewGuid(), order.BudgetId!.Value, 5_000, DateTime.UtcNow)));
@@ -138,7 +138,7 @@ public class SagaEventConsumersTests
         await using var db = InMemoryDbContextHelper.Create();
         var order = await SeedAsync(db, AwaitingPayment);
         var consumer = new PaymentFailedConsumer(
-            new PaymentFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>()));
+            new PaymentFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>()));
 
         await consumer.Consume(Context(new PaymentFailed(
             order.Id, Guid.NewGuid(), order.BudgetId!.Value, "expired", DateTime.UtcNow)));
@@ -165,7 +165,7 @@ public class SagaEventConsumersTests
         await using var db = InMemoryDbContextHelper.Create();
         var order = await SeedAsync(db, InExecution);
         var consumer = new ExecutionFailedConsumer(
-            new ExecutionFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>()));
+            new ExecutionFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>()));
 
         await consumer.Consume(Context(new ExecutionFailed(order.Id, Guid.NewGuid(), "Part unavailable.", DateTime.UtcNow)));
 
