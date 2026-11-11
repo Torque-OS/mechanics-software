@@ -23,6 +23,8 @@ public class MessageContractTests
     [InlineData(typeof(PaymentFailed), "urn:message:TorqueOS.Contracts.Billing:PaymentFailed")]
     [InlineData(typeof(ExecutionCompleted), "urn:message:TorqueOS.Contracts.Execution:ExecutionCompleted")]
     [InlineData(typeof(ExecutionFailed), "urn:message:TorqueOS.Contracts.Execution:ExecutionFailed")]
+    [InlineData(typeof(EnqueueExecution), "urn:message:TorqueOS.Contracts.Execution:EnqueueExecution")]
+    [InlineData(typeof(CancelBudget), "urn:message:TorqueOS.Contracts.Billing:CancelBudget")]
     public void MessageIdentity_IsStable(Type contract, string expectedUrn)
     {
         MessageUrn.ForType(contract).ToString().Should().Be(expectedUrn);
