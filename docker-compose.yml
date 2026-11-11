@@ -43,6 +43,11 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USERNAME=mechanics
       - RABBITMQ_PASSWORD=mechanics
+      - SMTP_HOST=${SMTP_HOST:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-dev@example.com}
+      - SMTP_PASS=${SMTP_PASS:-dev-password}
+      - SMTP_FROM=${SMTP_FROM:-noreply@mechanics-software.local}
     depends_on:
       db:
         condition: service_healthy
