@@ -63,11 +63,10 @@ sequenceDiagram
     participant E as Execution
     OS->>E: EnqueueExecution
     E-->>OS: ExecutionFailed
-    OS->>B: RefundPayment
-    B-->>OS: PaymentRefunded
-    OS->>B: CancelBudget
-    B-->>OS: BudgetCancelled
     OS-->>OS: CANCELLED
+    OS->>B: CancelBudget
+    B-->>B: estorna o pagamento (Mercado Pago)
+    B-->>OS: BudgetCancelled
 ```
 
 ## Estados da OS e da Saga
@@ -86,7 +85,9 @@ sequenceDiagram
 | `PaymentConfirmed` / `PaymentFailed` | evento | Billing → OS |
 | `EnqueueExecution` | comando | OS → Execution |
 | `ExecutionCompleted` / `ExecutionFailed` | evento | Execution → OS |
-| `RefundPayment`, `CancelBudget`, `CancelExecution` | comando (compensação) | OS → Billing/Execution |
+| `CancelBudget` | comando (compensação) | OS → Billing; cancela o QR ou estorna o pagamento, conforme o estado do pagamento |
+| `BudgetCancelled` | evento | Billing → OS |
+| `CancelExecution` | comando (compensação) | OS → Execution |
 
 Todas as mensagens carregam `ServiceOrderId` (correlação), `MessageId` (idempotência) e o *trace context* para rastreamento distribuído no Datadog.
 
@@ -102,4 +103,6 @@ Cada serviço publica seus contratos no namespace `TorqueOS.Contracts.<Serviço>
 | Mensagem | Campos |
 |---|---|
 | `ServiceOrderOpened` | `ServiceOrderId` (Guid), `CustomerId` (Guid), `VehicleId` (Guid), `OpenedAt` (DateTime, UTC) |
+| `EnqueueExecution` (`TorqueOS.Contracts.Execution`) | `ServiceOrderId` (Guid), `Priority` (int, padrão 0) |
+| `CancelBudget` (`TorqueOS.Contracts.Billing`) | `ServiceOrderId` (Guid) |
 

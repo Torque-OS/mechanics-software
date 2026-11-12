@@ -1,14 +1,12 @@
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
+using TorqueOS.Contracts.Billing;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 
-/// <summary>
-/// Reacts to the <c>PaymentFailed</c> event by cancelling the order — the Billing Service is
-/// responsible for cancelling its own budget as part of the same compensation (ADR-011).
-/// </summary>
-public sealed class PaymentFailedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<PaymentFailedHandler> logger)
+public sealed class PaymentFailedHandler(
+    IAppDbContext db, IEventPublisher eventPublisher, IEmailNotifier emailNotifier, ILogger<PaymentFailedHandler> logger)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -22,6 +20,8 @@ public sealed class PaymentFailedHandler(IAppDbContext db, IEmailNotifier emailN
         order.Cancel();
 
         await db.ReleaseReservedPartsAsync(order, cancellationToken);
+
+        await eventPublisher.PublishAsync(new CancelBudget(order.Id), order.Id, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
 

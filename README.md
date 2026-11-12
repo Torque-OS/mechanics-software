@@ -214,16 +214,19 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXEC
 | Add service item | `POST /api/service-orders/{id}/services` |
 | Add part item | `POST /api/service-orders/{id}/parts` |
 | Budget generated / approved | `BudgetGenerated` / `BudgetApproved` Saga event from the Billing Service (ADR-011) |
-| Payment confirmed | `PaymentConfirmed` Saga event from the Billing Service |
+| Payment confirmed | `PaymentConfirmed` Saga event from the Billing Service; sends `EnqueueExecution` to the Execution Service |
 | Start execution | `POST /api/service-orders/{id}/start-execution` |
 | Complete | `ExecutionCompleted` Saga event from the Execution Service, or `POST /api/service-orders/{id}/complete` |
 | Deliver | `POST /api/service-orders/{id}/deliver` |
-| Cancel (compensation) | `BudgetFailed` (from `IN_DIAGNOSIS`) / `BudgetRejected` / `PaymentFailed` / `ExecutionFailed` Saga event |
+| Cancel (compensation) | `BudgetFailed` (from `IN_DIAGNOSIS`) / `BudgetRejected` / `PaymentFailed` / `ExecutionFailed` Saga event; `PaymentFailed` and `ExecutionFailed` also send `CancelBudget` to the Billing Service (it cancels the QR or refunds the payment) |
 
 Saga events are consumed from RabbitMQ by `Infrastructure/Messaging/Consumers` (F4-12), one queue
 per event prefixed with the service name (`os-service-budget-generated`, …). Each consumer calls the
 matching handler in `Handlers/SagaEvents/`. Repeated deliveries are harmless: the inbox skips a
 `MessageId` already consumed, and the handlers ignore an event whose effect is already applied.
+Commands to the other services (`EnqueueExecution`, `CancelBudget`) are published through the same outbox
+transaction as the status change, with `CorrelationId` = service order id, and are not sent again when a
+repeated event finds the effect already applied.
 Every status change is recorded and returned by `GET /api/service-orders/{id}/history`.
 
 Full schemas available at `/swagger`.

@@ -1,6 +1,7 @@
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
+using TorqueOS.Contracts.Execution;
 
 namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 
@@ -8,7 +9,8 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEven
 /// Reacts to the <c>PaymentConfirmed</c> event published by the Billing Service after a
 /// successful Mercado Pago payment (ADR-011), moving the order to execution.
 /// </summary>
-public sealed class PaymentConfirmedHandler(IAppDbContext db, IEmailNotifier emailNotifier, ILogger<PaymentConfirmedHandler> logger)
+public sealed class PaymentConfirmedHandler(
+    IAppDbContext db, IEventPublisher eventPublisher, IEmailNotifier emailNotifier, ILogger<PaymentConfirmedHandler> logger)
 {
     public async Task<ServiceOrderResponse> ExecuteAsync(
         Guid serviceOrderId, CancellationToken cancellationToken = default)
@@ -20,6 +22,8 @@ public sealed class PaymentConfirmedHandler(IAppDbContext db, IEmailNotifier ema
             return ServiceOrderResponse.From(order);
 
         order.ConfirmPayment();
+
+        await eventPublisher.PublishAsync(new EnqueueExecution(order.Id), order.Id, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
 

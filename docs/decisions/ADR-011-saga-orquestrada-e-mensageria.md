@@ -37,6 +37,12 @@ Uma *state machine* (MassTransit Saga State Machine, correlação por `ServiceOr
 
 Compensações são comandos idempotentes: `CancelBudget`, `RefundPayment`, `CancelExecution`.
 
+> **Atualização (2026-11-10, F4-17 e F4-22/F4-23):** não existe comando `RefundPayment` separado.
+> O OS Service envia um único `CancelBudget`, e o Billing Service cancela o QR se o pagamento ainda
+> não foi recebido ou estorna no Mercado Pago se já foi, respondendo com `BudgetCancelled`.
+> No passo 5, `ExecutionFailed` leva a OS a `CANCELLED` e envia `CancelBudget`, que cobre o estorno.
+> Detalhes no README do `mechanics-billing-service`, seção "Cancellation and refund".
+
 ### 3. Mensageria: **RabbitMQ** + **MassTransit**
 
 - RabbitMQ no cluster EKS (e em `docker-compose` localmente).

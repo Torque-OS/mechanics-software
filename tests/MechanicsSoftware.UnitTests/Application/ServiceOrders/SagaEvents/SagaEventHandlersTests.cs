@@ -9,6 +9,9 @@ using MechanicsSoftware.Domain.Exceptions;
 using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.UnitTests.Helpers;
 using Moq;
+using TorqueOS.Contracts.Execution;
+using TorqueOS.Contracts.Billing;
+using MechanicsSoftware.Infrastructure.Persistence;
 
 namespace MechanicsSoftware.UnitTests.Application.ServiceOrders.SagaEvents;
 
@@ -95,7 +98,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("IN_EXECUTION");
@@ -140,7 +143,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+        var result = await new PaymentFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
@@ -155,7 +158,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new ExecutionFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+        var result = await new ExecutionFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
@@ -205,7 +208,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+        var result = await new PaymentConfirmedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("IN_EXECUTION");
@@ -250,7 +253,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new PaymentFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+        var result = await new PaymentFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
@@ -265,7 +268,7 @@ public class SagaEventHandlersTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var result = await new ExecutionFailedHandler(db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+        var result = await new ExecutionFailedHandler(db, HandlerStubs.EventPublisher(), HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
             .ExecuteAsync(order.Id);
 
         result.Status.Should().Be("CANCELLED");
@@ -301,4 +304,128 @@ public class SagaEventHandlersTests
     private static ExecutionCompletedHandler NewExecutionCompletedHandler(IAppDbContext db) =>
         new(db, new CompleteServiceOrderHandler(
             db, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<CompleteServiceOrderHandler>()));
+
+    private static async Task<(AppDbContext Db, string Name, ServiceOrder Order)> SeedAsync(ServiceOrder order)
+    {
+        var name = Guid.NewGuid().ToString();
+        var db = InMemoryDbContextHelper.Create(name);
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+        return (db, name, order);
+    }
+
+    private static Mock<IEventPublisher> PublisherCapturingCommittedStatus<TCommand>(
+        string databaseName, Guid orderId, Action<bool> onPublish, ServiceOrderStatus.Status committedBefore)
+        where TCommand : class
+    {
+        var publisher = new Mock<IEventPublisher>();
+        publisher
+            .Setup(p => p.PublishAsync(It.IsAny<TCommand>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                using var other = InMemoryDbContextHelper.Create(databaseName);
+                onPublish(other.ServiceOrders.Single(o => o.Id == orderId).Status.Is(committedBefore));
+            })
+            .Returns(Task.CompletedTask);
+        return publisher;
+    }
+
+    [Fact]
+    public async Task PaymentConfirmedHandler_PublishesEnqueueExecutionCorrelatedToTheOrder_BeforeSaving()
+    {
+        var (db, name, order) = await SeedAsync(OrderAwaitingPayment());
+        await using var _ = db;
+        var publishedBeforeCommit = false;
+        var publisher = PublisherCapturingCommittedStatus<EnqueueExecution>(
+            name, order.Id, still => publishedBeforeCommit = still, ServiceOrderStatus.Status.AwaitingPayment);
+
+        await new PaymentConfirmedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+                It.Is<EnqueueExecution>(c => c.ServiceOrderId == order.Id && c.Priority == 0),
+                order.Id,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        publishedBeforeCommit.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PaymentConfirmedHandler_AlreadyInExecution_DoesNotEnqueueAgain()
+    {
+        var (db, _, order) = await SeedAsync(OrderInExecution());
+        await using var __ = db;
+        var publisher = new Mock<IEventPublisher>();
+
+        await new PaymentConfirmedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentConfirmedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task PaymentFailedHandler_PublishesCancelBudgetCorrelatedToTheOrder_BeforeSaving()
+    {
+        var (db, name, order) = await SeedAsync(OrderAwaitingPayment());
+        await using var _ = db;
+        var publishedBeforeCommit = false;
+        var publisher = PublisherCapturingCommittedStatus<CancelBudget>(
+            name, order.Id, still => publishedBeforeCommit = still, ServiceOrderStatus.Status.AwaitingPayment);
+
+        await new PaymentFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+                It.Is<CancelBudget>(c => c.ServiceOrderId == order.Id), order.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+        publishedBeforeCommit.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExecutionFailedHandler_PublishesCancelBudgetCorrelatedToTheOrder_BeforeSaving()
+    {
+        var (db, name, order) = await SeedAsync(OrderInExecution());
+        await using var _ = db;
+        var publishedBeforeCommit = false;
+        var publisher = PublisherCapturingCommittedStatus<CancelBudget>(
+            name, order.Id, still => publishedBeforeCommit = still, ServiceOrderStatus.Status.InExecution);
+
+        await new ExecutionFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.Verify(p => p.PublishAsync(
+                It.Is<CancelBudget>(c => c.ServiceOrderId == order.Id), order.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+        publishedBeforeCommit.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PaymentFailedHandler_AlreadyCancelled_DoesNotCancelBudgetAgain()
+    {
+        var cancelled = OrderAwaitingPayment();
+        cancelled.Cancel();
+        var (db, _, order) = await SeedAsync(cancelled);
+        await using var __ = db;
+        var publisher = new Mock<IEventPublisher>();
+
+        await new PaymentFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<PaymentFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ExecutionFailedHandler_AlreadyCancelled_DoesNotCancelBudgetAgain()
+    {
+        var cancelled = OrderInExecution();
+        cancelled.Cancel();
+        var (db, _, order) = await SeedAsync(cancelled);
+        await using var __ = db;
+        var publisher = new Mock<IEventPublisher>();
+
+        await new ExecutionFailedHandler(db, publisher.Object, HandlerStubs.EmailNotifier(), HandlerStubs.Logger<ExecutionFailedHandler>())
+            .ExecuteAsync(order.Id);
+
+        publisher.VerifyNoOtherCalls();
+    }
 }
