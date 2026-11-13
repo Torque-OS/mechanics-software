@@ -17,6 +17,8 @@ data:
   DD_RUNTIME_METRICS_ENABLED: "true"
   DD_TRACE_SAMPLE_RATE: "1"
   OTEL_SERVICE_NAME: "mechanics-software-api"
-  RABBITMQ_HOST: "rabbitmq.messaging.svc.cluster.local" # F4-08: confirm the service DNS once RabbitMQ is provisioned
+  # RabbitMQ provisioned by mechanics-infra-k8s (F4-08): service "rabbitmq" in namespace "messaging",
+  # one vhost shared by the OS, Billing and Execution services so the saga messages reach each other.
+  RABBITMQ_HOST: "rabbitmq.messaging.svc.cluster.local"
   RABBITMQ_PORT: "5672"
-  RABBITMQ_VHOST: "/"
+  RABBITMQ_VHOST: "/torque-os"
