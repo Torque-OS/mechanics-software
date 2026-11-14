@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddSingleton(mongoSettings);
         services.AddSingleton<IServiceOrderStatusHistoryStore, MongoStatusHistoryStore>();
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+        services.AddScoped<LegacySqlStatusHistoryMigrator>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<DatabaseSeeder>();

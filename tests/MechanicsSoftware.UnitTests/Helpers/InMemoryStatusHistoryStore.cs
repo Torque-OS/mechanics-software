@@ -27,9 +27,14 @@ public sealed class InMemoryStatusHistoryStore : IServiceOrderStatusHistoryStore
     public Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
         Guid serviceOrderId,
         CancellationToken cancellationToken = default) =>
+        GetAsync([serviceOrderId], cancellationToken);
+
+    public Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
+        IReadOnlyCollection<Guid> serviceOrderIds,
+        CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ServiceOrderStatusHistoryRecord>>(
             _records
-                .Where(record => record.ServiceOrderId == serviceOrderId)
+                .Where(record => serviceOrderIds.Contains(record.ServiceOrderId))
                 .OrderBy(record => record.EnteredAt)
                 .ToList());
 }

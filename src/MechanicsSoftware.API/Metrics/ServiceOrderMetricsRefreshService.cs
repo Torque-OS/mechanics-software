@@ -38,12 +38,9 @@ public sealed class ServiceOrderMetricsRefreshService(
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = (await Task.WhenAll(
-                orders.Select(order => historyStore.GetAsync(
-                    order.Id,
-                    cancellationToken))))
-                .SelectMany(history => history)
-                .ToList();
+            var statusHistory = await historyStore.GetAsync(
+                orders.Select(order => order.Id).ToArray(),
+                cancellationToken);
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -71,26 +68,28 @@ public sealed class ServiceOrderMetricsRefreshService(
                     orders.LongCount(order => order.Status.ToString() == status));
             }
 
+            var periodsByStatus = statusHistory
+                .GroupBy(history => history.ServiceOrderId)
+                .SelectMany(historyGroup =>
+                {
+                    var orderedHistory = historyGroup.OrderBy(history => history.EnteredAt).ToArray();
+                    return orderedHistory.Select((history, index) => new
+                    {
+                        history.Status,
+                        Duration = ((index + 1 < orderedHistory.Length
+                            ? orderedHistory[index + 1].EnteredAt
+                            : DateTime.UtcNow) - history.EnteredAt).TotalHours
+                    });
+                })
+                .GroupBy(history => history.Status)
+                .ToDictionary(group => group.Key, group => group.Select(history => history.Duration).ToList());
+
             foreach (var status in statuses)
             {
-                var periods = statusHistory
-                    .GroupBy(history => history.ServiceOrderId)
-                    .SelectMany(historyGroup => historyGroup
-                        .OrderBy(history => history.EnteredAt)
-                        .Select((history, index) => new
-                        {
-                            history.Status,
-                            Duration = ((index + 1 < historyGroup.Count()
-                                ? historyGroup.OrderBy(item => item.EnteredAt).ElementAt(index + 1).EnteredAt
-                                : DateTime.UtcNow) - history.EnteredAt).TotalHours
-                        }))
-                    .Where(history => history.Status == status)
-                    .Select(history => history.Duration)
-                    .ToList();
-
+                periodsByStatus.TryGetValue(status, out var periods);
                 metrics.SetAverageExecutionDurationByStatus(
                     status,
-                    periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
+                    periods is null || periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

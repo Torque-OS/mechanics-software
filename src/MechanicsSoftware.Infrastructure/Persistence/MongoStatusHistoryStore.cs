@@ -58,10 +58,21 @@ public sealed class MongoStatusHistoryStore : IServiceOrderStatusHistoryStore, I
     public async Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
         Guid serviceOrderId,
         CancellationToken cancellationToken = default)
+        => await GetAsync([serviceOrderId], cancellationToken);
+
+    public async Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
+        IReadOnlyCollection<Guid> serviceOrderIds,
+        CancellationToken cancellationToken = default)
     {
+        if (serviceOrderIds.Count == 0)
+            return [];
+
         await EnsureIndexesAsync(cancellationToken);
 
-        var documents = await _collection.Find(document => document.ServiceOrderId == serviceOrderId)
+        var documents = await _collection.Find(
+                Builders<StatusHistoryDocument>.Filter.In(
+                    document => document.ServiceOrderId,
+                    serviceOrderIds))
             .SortBy(document => document.EnteredAt)
             .ToListAsync(cancellationToken);
 

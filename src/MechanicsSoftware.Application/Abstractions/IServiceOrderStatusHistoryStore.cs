@@ -15,4 +15,8 @@ public interface IServiceOrderStatusHistoryStore
     Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
         Guid serviceOrderId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ServiceOrderStatusHistoryRecord>> GetAsync(
+        IReadOnlyCollection<Guid> serviceOrderIds,
+        CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Domain.Entities;
@@ -13,12 +14,15 @@ namespace MechanicsSoftware.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IAppDbContext
 {
     private readonly IServiceOrderStatusHistoryStore? _historyStore;
+    private readonly ILogger<AppDbContext>? _logger;
 
     public AppDbContext(
         DbContextOptions<AppDbContext> options,
-        IServiceOrderStatusHistoryStore? historyStore = null) : base(options)
+        IServiceOrderStatusHistoryStore? historyStore = null,
+        ILogger<AppDbContext>? logger = null) : base(options)
     {
         _historyStore = historyStore;
+        _logger = logger;
     }
 
     public DbSet<User> Users { get; set; } = null!;
@@ -55,7 +59,18 @@ public sealed class AppDbContext : DbContext, IAppDbContext
         {
             var result = await base.SaveChangesAsync(cancellationToken);
             if (_historyStore is not null && statusHistory.Count > 0)
-                await _historyStore.AppendAsync(statusHistory, cancellationToken);
+            {
+                try
+                {
+                    await _historyStore.AppendAsync(statusHistory, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger?.LogError(
+                        exception,
+                        "Failed to persist service order status history after saving the order.");
+                }
+            }
 
             return result;
         }
