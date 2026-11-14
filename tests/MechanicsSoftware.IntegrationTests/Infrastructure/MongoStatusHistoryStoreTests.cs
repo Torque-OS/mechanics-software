@@ -40,11 +40,15 @@ public sealed class MongoStatusHistoryStoreTests : IAsyncLifetime, IDisposable
     public async Task AppendAsync_IsIdempotentForDuplicateRecords()
     {
         var serviceOrderId = Guid.NewGuid();
+        var enteredAt = DateTime.UtcNow;
+        enteredAt = new DateTime(
+            enteredAt.Ticks - enteredAt.Ticks % TimeSpan.TicksPerMillisecond,
+            DateTimeKind.Utc);
         var record = new ServiceOrderStatusHistoryRecord(
             Guid.NewGuid(),
             serviceOrderId,
             "RECEIVED",
-            DateTime.UtcNow);
+            enteredAt);
 
         await _store.AppendAsync([record]);
         await _store.AppendAsync([record]);
