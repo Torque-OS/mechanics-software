@@ -29,7 +29,12 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        var mongoSettings = configuration.GetSection("MongoDB").Get<MongoStatusHistorySettings>()
+            ?? throw new InvalidOperationException("MongoDB configuration is not configured.");
+        services.AddSingleton(mongoSettings);
+        services.AddSingleton<IServiceOrderStatusHistoryStore, MongoStatusHistoryStore>();
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+        services.AddScoped<LegacySqlStatusHistoryMigrator>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<DatabaseSeeder>();

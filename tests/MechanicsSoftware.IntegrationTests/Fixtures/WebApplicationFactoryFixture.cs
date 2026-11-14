@@ -5,12 +5,14 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MechanicsSoftware.Infrastructure.Persistence;
+using MechanicsSoftware.Application.Abstractions;
 using Testcontainers.PostgreSql;
 
 namespace MechanicsSoftware.IntegrationTests.Fixtures;
 
 public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    private readonly TestStatusHistoryStore _historyStore = new();
     private readonly PostgreSqlContainer _container =
         new PostgreSqlBuilder()
             .WithImage("postgres:17-alpine")
@@ -45,6 +47,12 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseNpgsql(_container.GetConnectionString()));
+
+            var historyDescriptor = services.FirstOrDefault(d =>
+                d.ServiceType == typeof(IServiceOrderStatusHistoryStore));
+            if (historyDescriptor != null)
+                services.Remove(historyDescriptor);
+            services.AddSingleton<IServiceOrderStatusHistoryStore>(_historyStore);
         });
 
         // Swaps the RabbitMQ transport for MassTransit's in-memory test harness. The EF Core
@@ -72,6 +80,7 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
 
         await context.Database.EnsureDeletedAsync();
         await context.Database.MigrateAsync();
+        _historyStore.Clear();
     }
 
     /// <summary>

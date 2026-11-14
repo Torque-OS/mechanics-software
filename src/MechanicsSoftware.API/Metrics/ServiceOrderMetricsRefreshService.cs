@@ -1,5 +1,4 @@
 using MechanicsSoftware.Application.Abstractions;
-using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +7,7 @@ namespace MechanicsSoftware.API.Metrics;
 public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
+    IServiceOrderStatusHistoryStore historyStore,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(1);
@@ -31,21 +31,16 @@ public sealed class ServiceOrderMetricsRefreshService(
             var orders = await db.ServiceOrders
                 .Select(order => new
                 {
+                    order.Id,
                     order.CreatedAt,
                     order.CompletedAt,
                     order.Status,
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = await db.ServiceOrderStatusHistory
-                .Select(history => new
-                {
-
-                    history.ServiceOrderId,
-                    history.Status,
-                    history.EnteredAt
-                })
-                .ToListAsync(cancellationToken);
+            var statusHistory = await historyStore.GetAsync(
+                orders.Select(order => order.Id).ToArray(),
+                cancellationToken);
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -65,7 +60,7 @@ public sealed class ServiceOrderMetricsRefreshService(
                 orders.LongCount(order => order.CreatedAt >= today),
                 orders.LongCount(order => order.CompletedAt >= today));
 
-            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
+            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "AWAITING_PAYMENT", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
             foreach (var status in statuses)
             {
                 metrics.SetOrderTotalByStatus(
@@ -73,26 +68,28 @@ public sealed class ServiceOrderMetricsRefreshService(
                     orders.LongCount(order => order.Status.ToString() == status));
             }
 
+            var periodsByStatus = statusHistory
+                .GroupBy(history => history.ServiceOrderId)
+                .SelectMany(historyGroup =>
+                {
+                    var orderedHistory = historyGroup.OrderBy(history => history.EnteredAt).ToArray();
+                    return orderedHistory.Select((history, index) => new
+                    {
+                        history.Status,
+                        Duration = ((index + 1 < orderedHistory.Length
+                            ? orderedHistory[index + 1].EnteredAt
+                            : DateTime.UtcNow) - history.EnteredAt).TotalHours
+                    });
+                })
+                .GroupBy(history => history.Status)
+                .ToDictionary(group => group.Key, group => group.Select(history => history.Duration).ToList());
+
             foreach (var status in statuses)
             {
-                var periods = statusHistory
-                    .GroupBy(history => history.ServiceOrderId)
-                    .SelectMany(historyGroup => historyGroup
-                        .OrderBy(history => history.EnteredAt)
-                        .Select((history, index) => new
-                        {
-                            history.Status,
-                            Duration = ((index + 1 < historyGroup.Count()
-                                ? historyGroup.OrderBy(item => item.EnteredAt).ElementAt(index + 1).EnteredAt
-                                : DateTime.UtcNow) - history.EnteredAt).TotalHours
-                        }))
-                    .Where(history => new ServiceOrderStatus(history.Status).ToString() == status)
-                    .Select(history => history.Duration)
-                    .ToList();
-
+                periodsByStatus.TryGetValue(status, out var periods);
                 metrics.SetAverageExecutionDurationByStatus(
                     status,
-                    periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
+                    periods is null || periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

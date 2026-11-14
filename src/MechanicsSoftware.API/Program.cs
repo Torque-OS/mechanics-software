@@ -87,6 +87,9 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
 
+    var statusHistoryMigrator = scope.ServiceProvider.GetRequiredService<LegacySqlStatusHistoryMigrator>();
+    await statusHistoryMigrator.MigrateAsync();
+
     var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
     await seeder.SeedAsync();
 }

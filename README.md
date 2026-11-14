@@ -70,7 +70,7 @@ A RESTful API implementing the **OS Service** of the Fase 4 microservices split 
 
 ### Option A — Docker Compose (recommended)
 
-Starts the API, PostgreSQL and RabbitMQ together:
+Starts the API, PostgreSQL, MongoDB and RabbitMQ together:
 
 ```bash
 docker compose up --build
@@ -81,6 +81,7 @@ docker compose up --build
 | API | `http://localhost:8080` |
 | Swagger UI | `http://localhost:8080/swagger` |
 | PostgreSQL | `localhost:5435` |
+| MongoDB | `localhost:27017` |
 | RabbitMQ (AMQP) | `localhost:5672` |
 | RabbitMQ management UI | `http://localhost:15672` (`mechanics` / `mechanics`) |
 
@@ -138,6 +139,9 @@ All variables with a default work out of the box for local development. Producti
 | `RABBITMQ_VHOST` | No | RabbitMQ virtual host | `/` |
 | `RABBITMQ_USERNAME` | Yes | RabbitMQ user | `mechanics` (matches `docker-compose.yml`) |
 | `RABBITMQ_PASSWORD` | Yes | RabbitMQ password | `mechanics` (matches `docker-compose.yml`) |
+| `MongoDB__ConnectionString` | Yes | MongoDB connection string for OS status history | `mongodb://localhost:27017` locally |
+| `MongoDB__DatabaseName` | No | MongoDB database owned by the OS Service | `mechanics_software` |
+| `MongoDB__CollectionName` | No | Status history collection | `service_order_status_history` |
 
 > *`GATEWAY_KEY` must match the `gateway_key` Terraform variable in `mechanics-infra-k8s`.
 
