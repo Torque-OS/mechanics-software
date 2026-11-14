@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<DeliverServiceOrderHandler>();
         services.AddScoped<GetServiceOrderStatusHandler>();
         services.AddScoped<GetServiceOrderHistoryHandler>();
+        services.AddScoped<GetServiceOrderBillingHandler>();
         services.AddScoped<GetServiceOrderHandler>();
         services.AddScoped<ListServiceOrdersHandler>();
         services.AddScoped<GetAverageExecutionTimeHandler>();

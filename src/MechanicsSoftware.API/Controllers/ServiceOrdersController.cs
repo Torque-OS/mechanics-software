@@ -16,6 +16,7 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     GetServiceOrderHandler getHandler,
     GetServiceOrderStatusHandler getStatusHandler,
     GetServiceOrderHistoryHandler historyHandler,
+    GetServiceOrderBillingHandler billingHandler,
     ListServiceOrdersHandler listHandler,
     StartDiagnosisHandler startDiagnosisHandler,
     AddServiceItemHandler addServiceItemHandler,
@@ -54,6 +55,14 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     public async Task<IActionResult> GetHistory(Guid id, CancellationToken cancellationToken)
     {
         var result = await historyHandler.ExecuteAsync(id, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}/billing")]
+    [Authorize(Policy = Policies.Staff)]
+    public async Task<IActionResult> GetBilling(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await billingHandler.ExecuteAsync(id, cancellationToken);
         return Ok(result);
     }
 
