@@ -431,10 +431,83 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
     }
 
     // ========================================================================
+    // F4-13 — customer tokens (CPF Lambda) only reach the customer's own orders
+    // ========================================================================
+
+    [Theory]
+    [InlineData("status")]
+    [InlineData("history")]
+    public async Task CustomerToken_OwnOrder_ReturnsOk(string resource)
+    {
+        var client = await AuthenticatedClientAsync();
+        var (customerId, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId);
+        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}/{resource}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("status")]
+    [InlineData("history")]
+    public async Task CustomerToken_AnotherCustomersOrder_ReturnsNotFound(string resource)
+    {
+        var client = await AuthenticatedClientAsync();
+        var (ownerId, _) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+        var (_, otherOrderId) = await CustomerWithOrderAsync(client, "52998224725", "other@example.com", "XYZ9E87");
+
+        using var customerClient = CustomerClient(ownerId);
+        var response = await customerClient.GetAsync($"/api/service-orders/{otherOrderId}/{resource}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "a customer must not read, or learn about, another customer's order");
+    }
+
+    [Fact]
+    public async Task CustomerToken_WithoutSubject_ReturnsNotFound()
+    {
+        var client = await AuthenticatedClientAsync();
+        var (_, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId: null);
+        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}/status");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "a customer token that names no customer must not be treated as staff");
+    }
+
+    [Fact]
+    public async Task StaffToken_AnyCustomersOrder_ReturnsOk()
+    {
+        var client = await AuthenticatedClientAsync();
+        var (_, orderId) = await CustomerWithOrderAsync(client, "52998224725", "other@example.com", "XYZ9E87");
+
+        var status = await client.GetAsync($"/api/service-orders/{orderId}/status");
+        var history = await client.GetAsync($"/api/service-orders/{orderId}/history");
+
+        status.StatusCode.Should().Be(HttpStatusCode.OK);
+        history.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task CustomerToken_StaffOnlyEndpoint_ReturnsForbidden()
+    {
+        var client = await AuthenticatedClientAsync();
+        var (customerId, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId);
+        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ========================================================================
     // Helper Methods
     // ========================================================================
 
-    private HttpClient CustomerClient(Guid customerId)
+    // Mirrors the token the CPF Lambda (mechanics-lambda/src/jwt.js) issues: sub = customer id, cpf, role CUSTOMER.
+    private HttpClient CustomerClient(Guid? customerId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(WebApplicationFactoryFixture.JwtSecret));
 
@@ -443,7 +516,7 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             audience: JwtSettings.DefaultAudience,
             claims:
             [
-                new Claim(JwtRegisteredClaimNames.Sub, customerId.ToString()),
+                .. customerId is null ? [] : new[] { new Claim(JwtRegisteredClaimNames.Sub, customerId.Value.ToString()) },
                 new Claim("cpf", "11144477735"),
                 new Claim(JwtSettings.RoleClaimType, Policies.CustomerRole),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
@@ -640,6 +713,16 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             $"/api/service-orders/{orderId}/deliver", new { });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<(Guid CustomerId, Guid OrderId)> CustomerWithOrderAsync(
+        HttpClient client, string document, string email, string plate)
+    {
+        var customerId = await CreateCustomerAsync(client, document, email);
+        var vehicleId = await CreateVehicleAsync(client, customerId, plate);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        return (customerId, orderId);
     }
 
     private static async Task<Guid> OrderInDiagnosisWithServiceAsync(HttpClient client)
