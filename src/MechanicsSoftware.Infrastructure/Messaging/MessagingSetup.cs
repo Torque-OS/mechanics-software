@@ -20,6 +20,9 @@ public static class MessagingSetup
 
         services.AddScoped<IEventPublisher, MassTransitEventPublisher>();
 
+        services.AddSingleton<SagaMetricsObserver>();
+        services.AddConsumeObserver(provider => provider.GetRequiredService<SagaMetricsObserver>());
+
         services.AddMassTransit(bus =>
         {
             bus.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter(EndpointPrefix, false));
