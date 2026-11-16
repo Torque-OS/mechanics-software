@@ -1,4 +1,5 @@
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace MechanicsSoftware.Infrastructure.Persistence;
@@ -19,7 +20,7 @@ public sealed class LegacySqlStatusHistoryMigrator(
             await historyStore.AppendAsync(records, cancellationToken);
 
         await db.Database.ExecuteSqlRawAsync(
-            $"DROP TABLE \"{LegacyTableName}\"",
+            $"DROP TABLE IF EXISTS \"{LegacyTableName}\"",
             cancellationToken);
     }
 
@@ -62,7 +63,8 @@ public sealed class LegacySqlStatusHistoryMigrator(
             records.Add(new ServiceOrderStatusHistoryRecord(
                 reader.GetGuid(0),
                 reader.GetGuid(1),
-                reader.GetString(2),
+                new ServiceOrderStatus(
+                    Enum.Parse<ServiceOrderStatus.Status>(reader.GetString(2))).ToString(),
                 reader.GetDateTime(3)));
         }
 
