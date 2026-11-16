@@ -64,8 +64,20 @@ jobs:
             --no-build \
             --collect:"XPlat Code Coverage" \
             --settings coverlet.runsettings \
-            --results-directory ./coverage-results \
+            --results-directory ./coverage-results/unit \
             --logger "trx;LogFileName=test-results.trx"
+
+      # Controllers, middleware, messaging and the database/MongoDB adapters are exercised by the
+      # integration tests (Testcontainers, Docker is available on ubuntu-latest). Without this run the
+      # API package was reported at ~32% although the integration suite covers it.
+      - name: Run integration tests with coverage
+        run: |
+          dotnet test tests/MechanicsSoftware.IntegrationTests/ \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --settings coverlet.runsettings \
+            --results-directory ./coverage-results/integration \
+            --logger "trx;LogFileName=integration-test-results.trx"
 
       - name: End SonarCloud analysis
         continue-on-error: true
@@ -108,9 +120,11 @@ jobs:
           python3 - <<'EOF'
           import xml.etree.ElementTree as ET, glob, sys
 
-          files = glob.glob("coverage-results/**/coverage.cobertura.xml", recursive=True)
+          # Merged unit + integration report written by reportgenerator above. Reading a raw
+          # coverlet file would only see one of the two test runs.
+          files = glob.glob("coverage-html/Cobertura.xml")
           if not files:
-              print("No coverage file found", file=sys.stderr)
+              print("No merged coverage report found", file=sys.stderr)
               sys.exit(1)
 
           tree = ET.parse(files[0])
@@ -153,7 +167,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
         with:
-          filename: coverage-results/**/coverage.cobertura.xml
+          filename: coverage-html/Cobertura.xml
           badge: true
           fail_below_min: true
           format: markdown
