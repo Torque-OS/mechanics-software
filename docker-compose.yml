@@ -48,6 +48,9 @@ services:
       - SMTP_USER=${SMTP_USER:-dev@example.com}
       - SMTP_PASS=${SMTP_PASS:-dev-password}
       - SMTP_FROM=${SMTP_FROM:-noreply@mechanics-software.local}
+      - BILLING_API_URL=${BILLING_API_URL:-http://host.docker.internal:8081}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
