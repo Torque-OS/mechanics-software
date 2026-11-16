@@ -63,6 +63,9 @@ services:
       - MongoDB__ConnectionString=mongodb://mongodb:27017
       - MongoDB__DatabaseName=mechanics_software
       - MongoDB__CollectionName=service_order_status_history
+      - BILLING_API_URL=${BILLING_API_URL:-http://host.docker.internal:8081}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
