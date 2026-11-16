@@ -520,6 +520,17 @@
           }
         },
         {
+          "name": "Get Billing (budget + payment from Billing Service)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/billing",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "billing"]
+            }
+          }
+        },
+        {
           "name": "Start Diagnosis",
           "request": {
             "method": "POST",
@@ -559,6 +570,17 @@
               "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/parts",
               "host": ["{{baseUrl}}"],
               "path": ["api", "service-orders", "{{serviceOrderId}}", "parts"]
+            }
+          }
+        },
+        {
+          "name": "Request Budget (sends RequestBudget to Billing Service)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/request-budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "request-budget"]
             }
           }
         },

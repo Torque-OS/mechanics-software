@@ -1,3 +1,4 @@
+using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Domain.Entities;
 using MechanicsSoftware.Domain.Enums;
 
@@ -75,6 +76,20 @@ public sealed record ServiceOrderStatusResponse(
     DateTime CreatedAt,
     DateTime? DeliveredAt
 );
+
+public sealed record ServiceOrderBillingResponse(
+    Guid ServiceOrderId,
+    bool BillingAvailable,
+    string? UnavailableReason,
+    BillingBudget? Budget,
+    BillingPayment? Payment)
+{
+    public static ServiceOrderBillingResponse Available(Guid serviceOrderId, BillingBudget? budget, BillingPayment? payment) =>
+        new(serviceOrderId, true, null, budget, payment);
+
+    public static ServiceOrderBillingResponse Unavailable(Guid serviceOrderId, string reason) =>
+        new(serviceOrderId, false, reason, null, null);
+}
 
 public sealed record ServiceOrderHistoryResponse(
     Guid Id,

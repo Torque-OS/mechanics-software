@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 using MechanicsSoftware.IntegrationTests.Base;
@@ -56,6 +57,7 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
     public override async Task InitializeAsync()
     {
         await Factory.ResetDomainDataAsync();
+        Factory.Billing.Unavailable = false;
         await AuthenticateAsync(AdminEmail, AdminPassword);
     }
 
@@ -320,6 +322,112 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         await bus.Publish(new ExecutionFailed(orderId, Guid.NewGuid(), "Part unavailable.", DateTime.UtcNow));
 
         await WaitForStatusAsync(client, orderId, "CANCELLED");
+    }
+
+    [Fact]
+    public async Task RequestBudget_OrderInDiagnosis_SendsTheItemSnapshotToBilling()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var serviceId = await CreateServiceAsync(client);
+        var partId = await CreatePartAsync(client);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+        await StartDiagnosisAsync(client, orderId);
+        await AddServiceItemAsync(client, orderId, serviceId);
+        await AddPartItemAsync(client, orderId, partId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
+        var harness = Factory.Services.GetTestHarness();
+        (await harness.Published.Any<RequestBudget>(m => m.Context.Message.ServiceOrderId == orderId)).Should().BeTrue();
+        var sent = harness.Published.Select<RequestBudget>(m => m.Context.Message.ServiceOrderId == orderId).Single().Context;
+        sent.CorrelationId.Should().Be(orderId);
+        sent.Message.CustomerId.Should().Be(customerId);
+        sent.Message.Items.Should().ContainSingle(i => i.Type == "Service" && i.ReferenceId == serviceId &&
+                                                       i.UnitPriceInCents == ServicePriceInCents && i.Quantity == ServiceItemQuantity);
+        sent.Message.Items.Should().ContainSingle(i => i.Type == "Part" && i.ReferenceId == partId &&
+                                                       i.UnitPriceInCents == PartPriceInCents && i.Quantity == PartItemQuantity);
+        await AssertOrderStatusAsync(client, orderId, "IN_DIAGNOSIS");
+    }
+
+    [Fact]
+    public async Task RequestBudget_WithoutServiceItem_Returns422()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+        await StartDiagnosisAsync(client, orderId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task RequestBudget_OrderNotInDiagnosis_Returns409()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Billing_BudgetAndPayment_AreReturnedFromTheBillingService()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        var budget = new BillingBudget(Guid.NewGuid(), "APPROVED", ServicePriceInCents, DateTime.UtcNow, DateTime.UtcNow,
+            [new BillingBudgetItem("Service", Guid.NewGuid(), "Troca de óleo", ServicePriceInCents, 1, ServicePriceInCents)]);
+        var payment = new BillingPayment(Guid.NewGuid(), "PENDING", ServicePriceInCents, "qr-data", null, DateTime.UtcNow, null, null);
+        Factory.Billing.SetBudget(orderId, budget);
+        Factory.Billing.SetPayment(budget.Id, payment);
+
+        var response = await client.GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var billing = await ReadAsync<ServiceOrderBillingResponse>(response);
+        billing.BillingAvailable.Should().BeTrue();
+        billing.Budget!.Id.Should().Be(budget.Id);
+        billing.Budget.Items.Should().ContainSingle();
+        billing.Payment!.Id.Should().Be(payment.Id);
+        billing.Payment.QrData.Should().Be("qr-data");
+    }
+
+    [Fact]
+    public async Task Billing_BillingServiceDown_StillAnswersWithBillingUnavailable()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        Factory.Billing.Unavailable = true;
+
+        var response = await client.GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var billing = await ReadAsync<ServiceOrderBillingResponse>(response);
+        billing.BillingAvailable.Should().BeFalse();
+        billing.UnavailableReason.Should().NotBeNullOrWhiteSpace();
+        billing.Budget.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Billing_AsCustomer_Returns403()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        var response = await CustomerClient(customerId).GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ========================================================================

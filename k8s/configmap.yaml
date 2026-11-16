@@ -20,3 +20,4 @@ data:
   RABBITMQ_HOST: "rabbitmq.messaging.svc.cluster.local" # F4-08: confirm the service DNS once RabbitMQ is provisioned
   RABBITMQ_PORT: "5672"
   RABBITMQ_VHOST: "/"
+  BILLING_API_URL: "http://mechanics-billing-api.mechanics-billing.svc.cluster.local:8080" # nosonar
