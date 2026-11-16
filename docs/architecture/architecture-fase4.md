@@ -33,6 +33,50 @@ flowchart LR
 
 Nenhum serviço acessa o banco de outro; a comunicação é por mensagens (RabbitMQ) e, quando necessário, REST.
 
+## Autenticação (CPF/JWT + API Gateway) — F4-13
+
+A autenticação da Fase 3 continua a mesma; a Fase 4 só muda o que existe atrás do gateway. O API Gateway encaminha tráfego HTTP **apenas para o OS Service** — Billing e Execution não têm rotas públicas e conversam só via RabbitMQ.
+
+```mermaid
+sequenceDiagram
+    actor C as Cliente
+    participant GW as API Gateway
+    participant LA as Lambda CPF Auth
+    participant AZ as Lambda Authorizer
+    participant OS as OS Service
+    participant DB as PostgreSQL OS
+
+    C->>GW: POST /auth { cpf }
+    GW->>LA: invoca
+    LA->>DB: SELECT customers WHERE document = cpf
+    LA-->>C: JWT (sub = id do cliente, cpf, role = CUSTOMER), ou 404/403 se não existe/inativo
+    C->>GW: GET /api/service-orders/{id}/status (Bearer)
+    GW->>AZ: valida assinatura, iss, aud, exp
+    AZ-->>GW: isAuthorized
+    GW->>OS: VPC Link + NLB, com X-Gateway-Key
+    OS->>OS: valida o JWT de novo + policy + dono da OS
+    OS-->>C: 200 (ou 404 se a OS não for do cliente)
+```
+
+| Item | Onde | Valor |
+|---|---|---|
+| Algoritmo / segredo | Lambda (`JWT_SECRET`) e OS Service (`JWT_SECRET`) | HS256, **mesmo segredo** nos dois |
+| Issuer / audience | `mechanics-lambda/src/config.js`, `JwtSettings.cs` | `torque-os` / `mechanics-software-api` |
+| Rotas públicas (sem authorizer) | `mechanics-infra-k8s/modules/apigateway` | `POST /auth`, `POST /api/auth/login`, `GET /health` |
+| Demais rotas | `ANY /{proxy+}` | Lambda Authorizer (REQUEST, cache configurável) |
+| Defesa em profundidade | `GatewayKeyMiddleware` | header `X-Gateway-Key` injetado pelo gateway; o NLB é interno |
+
+**Papéis**
+
+| Papel | Origem do token | Acesso no OS Service |
+|---|---|---|
+| `ADMIN`, `ATTENDANT`, `MECHANIC` | `POST /api/auth/login` (e-mail + senha) | Todas as rotas (policy `Staff`) |
+| `CUSTOMER` | `POST /auth` (CPF, Lambda) | Só `GET /api/service-orders/{id}/status` e `/history`, **e apenas das próprias OS** |
+
+O OS Service compara o `sub` do token do cliente com o `CustomerId` da OS (`ClaimsPrincipalExtensions.OrderOwnerScope`). OS de outro cliente retorna **404**, não 403, para não revelar que o id existe. Token de cliente sem `sub` válido não acessa nenhuma OS.
+
+**Verificação no ambiente:** `scripts/smoke-auth-gateway.sh` roda o fluxo completo contra o gateway publicado.
+
 ## Saga — fluxo feliz
 
 ```mermaid

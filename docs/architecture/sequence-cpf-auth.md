@@ -36,11 +36,11 @@ sequenceDiagram
     RDS-->>Lambda: row | null
 
     alt Customer not found
-        Lambda-->>APIGW: 401 Unauthorized<br/>{ "error": "Customer not found" }
-        APIGW-->>Client: 401 Unauthorized
+        Lambda-->>APIGW: 404 Not Found<br/>{ "error": "Customer not found" }
+        APIGW-->>Client: 404 Not Found
     else Customer inactive (active = false)
-        Lambda-->>APIGW: 401 Unauthorized<br/>{ "error": "Customer not found" }
-        APIGW-->>Client: 401 Unauthorized
+        Lambda-->>APIGW: 403 Forbidden<br/>{ "error": "Customer is inactive" }
+        APIGW-->>Client: 403 Forbidden
     end
 
     note over Lambda: Sign JWT (HS256)<br/>sub = customer.id<br/>cpf = customer.cpf<br/>role = CUSTOMER<br/>iss = torque-os<br/>aud = mechanics-software-api<br/>jti = random UUID<br/>exp = now + JWT_EXPIRATION
@@ -97,8 +97,12 @@ sequenceDiagram
 
     note over API: Authorization policy check<br/>(Policies.CustomerOrStaff<br/>or Policies.Staff)
 
-    API->>RDS: query (depends on endpoint)
+    API->>RDS: query (depends on endpoint)<br/>CUSTOMER role: filtered by CustomerId = sub
     RDS-->>API: result
+
+    alt CUSTOMER asks for another customer's order
+        API-->>Client: 404 Not Found
+    end
 
     API-->>VPCLink: 200 / 201 / 204
     VPCLink-->>APIGW: response
@@ -115,12 +119,15 @@ sequenceDiagram
 | `GatewayKeyMiddleware` | ASP.NET Core API | `X-Gateway-Key` header — defence in depth against traffic bypassing API Gateway |
 | `JwtBearer` middleware | ASP.NET Core API | JWT re-validation (signature + claims) |
 | Authorization policy | ASP.NET Core API | `role` claim — distinguishes `CUSTOMER` from staff |
+| Order ownership (F4-13) | ASP.NET Core API | A `CUSTOMER` token only reads orders whose `CustomerId` equals its `sub`; any other order returns 404 |
 
 The API validates the JWT a second time (step 10) even though the authorizer already did it. This is intentional: the NLB endpoint is internal, but re-validation ensures no forged request can reach business logic even if the network perimeter is compromised.
 
 ---
 
 ## Related
+
+- [Arquitetura Fase 4 — Autenticação (F4-13)](./architecture-fase4.md#autenticação-cpfjwt--api-gateway--f4-13): the same flow on the microservices design; the gateway only routes to the OS Service
 
 - [RFC-001 — Cloud, database, and auth design decisions](../rfc/RFC-001-fase3-cloud-db-auth.md)
 - [ADR-007 — Communication pattern (HTTP API v2 + VPC Link)](../decisions/ADR-007-communication-pattern.md)
