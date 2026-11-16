@@ -145,6 +145,7 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     }
 
     [HttpGet("metrics/daily-volume")]
+    [Authorize(Policy = Policies.Staff)]
     public async Task<IActionResult> DailyVolume(
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,

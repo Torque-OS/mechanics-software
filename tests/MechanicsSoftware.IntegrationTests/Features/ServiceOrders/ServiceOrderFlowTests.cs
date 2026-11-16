@@ -490,14 +490,19 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         history.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
-    public async Task CustomerToken_StaffOnlyEndpoint_ReturnsForbidden()
+    [Theory]
+    [InlineData("/api/service-orders/{0}")]
+    [InlineData("/api/service-orders/{0}/billing")]
+    [InlineData("/api/service-orders")]
+    [InlineData("/api/service-orders/metrics/average-execution-time")]
+    [InlineData("/api/service-orders/metrics/daily-volume")]
+    public async Task CustomerToken_StaffOnlyEndpoint_ReturnsForbidden(string pathTemplate)
     {
         var client = await AuthenticatedClientAsync();
         var (customerId, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
 
         using var customerClient = CustomerClient(customerId);
-        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}");
+        var response = await customerClient.GetAsync(string.Format(pathTemplate, orderId));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
