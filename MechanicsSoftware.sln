@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MechanicsSoftware.Integrati
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MechanicsSoftware.Contracts", "src\MechanicsSoftware.Contracts\MechanicsSoftware.Contracts.csproj", "{7623AFC6-40E1-43B3-AC86-34A6615657B3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MechanicsSoftware.BddTests", "tests\MechanicsSoftware.BddTests\MechanicsSoftware.BddTests.csproj", "{E13EBCB4-3871-448F-932C-92384A6570CA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -115,6 +117,18 @@ Global
 		{7623AFC6-40E1-43B3-AC86-34A6615657B3}.Release|x64.Build.0 = Release|Any CPU
 		{7623AFC6-40E1-43B3-AC86-34A6615657B3}.Release|x86.ActiveCfg = Release|Any CPU
 		{7623AFC6-40E1-43B3-AC86-34A6615657B3}.Release|x86.Build.0 = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|x64.Build.0 = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Debug|x86.Build.0 = Debug|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|x64.ActiveCfg = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|x64.Build.0 = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|x86.ActiveCfg = Release|Any CPU
+		{E13EBCB4-3871-448F-932C-92384A6570CA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -127,5 +141,6 @@ Global
 		{EE58CD3D-C741-42E5-9D91-EEF2EE73A66E} = {EE417F07-6A84-45CC-830E-4282D3C9FBEC}
 		{B8DFD13F-E8CC-4BF6-80E6-36F16226F484} = {EE417F07-6A84-45CC-830E-4282D3C9FBEC}
 		{7623AFC6-40E1-43B3-AC86-34A6615657B3} = {46418970-B37B-4F46-BA1B-F096C03B80D4}
+		{E13EBCB4-3871-448F-932C-92384A6570CA} = {EE417F07-6A84-45CC-830E-4282D3C9FBEC}
 	EndGlobalSection
 EndGlobal

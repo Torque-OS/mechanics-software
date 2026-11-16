@@ -1,9 +1,11 @@
 using MassTransit;
+using MechanicsSoftware.Application.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using MechanicsSoftware.Infrastructure.Persistence;
 using MechanicsSoftware.Application.Abstractions;
 using Testcontainers.PostgreSql;
@@ -22,6 +24,8 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
             .Build();
 
     public const string JwtSecret = "test-secret-key-for-testing-only-min-32-chars-required-here";
+
+    public FakeBillingClient Billing { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -55,9 +59,12 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
             services.AddSingleton<IServiceOrderStatusHistoryStore>(_historyStore);
         });
 
-        // Swaps the RabbitMQ transport for MassTransit's in-memory test harness. The EF Core
-        // outbox stays enabled, so published messages still go through the outbox tables.
-        builder.ConfigureTestServices(services => services.AddMassTransitTestHarness());
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddMassTransitTestHarness();
+            services.RemoveAll<IBillingClient>();
+            services.AddSingleton<IBillingClient>(Billing);
+        });
 
         builder.UseEnvironment("Test");
 
@@ -71,6 +78,7 @@ public sealed class WebApplicationFactoryFixture : WebApplicationFactory<Program
         Environment.SetEnvironmentVariable("RABBITMQ_HOST", "localhost");
         Environment.SetEnvironmentVariable("RABBITMQ_USERNAME", "test");
         Environment.SetEnvironmentVariable("RABBITMQ_PASSWORD", "test");
+        Environment.SetEnvironmentVariable("BILLING_API_URL", "http://billing.test");
     }
 
     public async Task ResetDatabaseAsync()
