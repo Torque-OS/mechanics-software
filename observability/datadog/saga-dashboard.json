@@ -1,0 +1,522 @@
+{
+  "title": "Torque OS — Saga: fluxo e falhas (F4-37)",
+  "description": "Fluxo da saga orquestrada pelo OS Service (ADR-011): volume de OS, tempo por etapa, compensações, mensagens e DLQ. Fonte: observability/datadog/saga-dashboard.json no repositório mechanics-software.",
+  "layout_type": "ordered",
+  "reflow_type": "auto",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "kube_namespace",
+      "available_values": [],
+      "default": "*"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "title": "Volume de OS",
+        "type": "group",
+        "layout_type": "ordered",
+        "background_color": "vivid_blue",
+        "widgets": [
+          {
+            "definition": {
+              "title": "OS abertas hoje",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_opened_today{$env}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "autoscale": true
+            }
+          },
+          {
+            "definition": {
+              "title": "OS abertas (total)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_opened_total{$env}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "autoscale": true
+            }
+          },
+          {
+            "definition": {
+              "title": "OS concluídas hoje",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_completed_today{$env}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "autoscale": true
+            }
+          },
+          {
+            "definition": {
+              "title": "OS por etapa da saga",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_current_by_status{$env} by {status}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "area"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Tempo por etapa da saga",
+        "type": "group",
+        "layout_type": "ordered",
+        "background_color": "vivid_purple",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Tempo médio em cada etapa (horas)",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_average_execution_duration_hours_by_status{$env} by {status}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Tempo médio por etapa ao longo do tempo (horas)",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_average_execution_duration_hours_by_status{$env,!status:delivered,!status:cancelled} by {status}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Tempo médio abertura → conclusão (horas)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_average_execution_time_hours{$env}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "autoscale": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Compensações",
+        "type": "group",
+        "layout_type": "ordered",
+        "background_color": "vivid_orange",
+        "widgets": [
+          {
+            "definition": {
+              "title": "OS canceladas (total)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_service_orders_current_by_status{$env,status:cancelled}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "autoscale": true
+            }
+          },
+          {
+            "definition": {
+              "title": "Compensações por etapa em que a OS estava",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "max:mechanics.mechanics_saga_compensations_by_stage{$env} by {stage}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Comandos de compensação publicados",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:mechanics.mechanics_saga_messages_published.count{$env,message:cancelbudget} by {message}.as_count()"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "note",
+              "content": "**Como ler:** `AWAITING_APPROVAL` = orçamento recusado, `AWAITING_PAYMENT` = pagamento falhou, `IN_EXECUTION` = execução falhou (estorno + cancelamento do orçamento). Calculado a partir do histórico de status da OS.",
+              "background_color": "white",
+              "font_size": "14",
+              "text_align": "left",
+              "show_tick": false,
+              "has_padding": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Fluxo de mensagens da saga",
+        "type": "group",
+        "layout_type": "ordered",
+        "background_color": "vivid_green",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Eventos consumidos pelo OS Service",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:mechanics.mechanics_saga_messages_consumed.count{$env} by {message}.as_count()"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Mensagens publicadas pelo OS Service",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:mechanics.mechanics_saga_messages_published.count{$env} by {message}.as_count()"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Falhas e DLQ",
+        "type": "group",
+        "layout_type": "ordered",
+        "background_color": "vivid_pink",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Mensagens nas DLQs (_error)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:rabbitmq.rabbitmq_queue_messages{queue:*_error}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "scalar",
+                  "conditional_formats": [
+                    {
+                      "comparator": ">",
+                      "value": 0,
+                      "palette": "white_on_red"
+                    },
+                    {
+                      "comparator": "<=",
+                      "value": 0,
+                      "palette": "white_on_green"
+                    }
+                  ]
+                }
+              ],
+              "precision": 0,
+              "autoscale": true
+            }
+          },
+          {
+            "definition": {
+              "title": "Mensagens por DLQ",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:rabbitmq.rabbitmq_queue_messages{queue:*_error} by {queue}",
+                      "aggregator": "last"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Falhas de consumo no OS Service",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:mechanics.mechanics_saga_consume_faults.count{$env} by {message}.as_count()"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Erros HTTP no OS Service",
+              "type": "timeseries",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "q",
+                      "data_source": "metrics",
+                      "query": "sum:mechanics.mechanics_http_errors.count{$env} by {status_code}.as_count()"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "note",
+              "content": "**DLQ:** o MassTransit move para `<fila>_error` a mensagem que esgotou o retry (ADR-013). Qualquer valor acima de zero precisa de investigação: veja a fila, reprocesse com `Move to queue` no RabbitMQ Management após corrigir a causa.",
+              "background_color": "white",
+              "font_size": "14",
+              "text_align": "left",
+              "show_tick": false,
+              "has_padding": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

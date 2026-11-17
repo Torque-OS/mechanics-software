@@ -165,6 +165,10 @@ sequenceDiagram
 
 Regras na [ADR-013](../decisions/ADR-013-rest-sincrono-entre-servicos.md).
 
+## Observabilidade da saga (F4-37)
+
+Dashboard Datadog com volume de OS, tempo por etapa, compensações, fluxo de mensagens e DLQ: [docs/observability/saga-dashboard.md](../observability/saga-dashboard.md).
+
 ## Decisões relacionadas
 
 ADR-010 (divisão), ADR-011 (saga + mensageria), ADR-012 (bancos), ADR-013 (REST síncrono), ADR-007 (API Gateway), ADR-009 (HPA).
