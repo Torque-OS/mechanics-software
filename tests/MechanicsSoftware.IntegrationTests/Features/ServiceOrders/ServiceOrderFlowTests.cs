@@ -322,6 +322,25 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         await bus.Publish(new ExecutionFailed(orderId, Guid.NewGuid(), "Part unavailable.", DateTime.UtcNow));
 
         await WaitForStatusAsync(client, orderId, "CANCELLED");
+
+        // F4-37: the saga dashboard reads these from /metrics. The consume observer and the outbox
+        // delivery of CancelBudget run just after the status change, so the scrape is polled.
+        string[] expected =
+        [
+            "mechanics_saga_messages_consumed_total{message=\"ExecutionFailed\"}",
+            "mechanics_saga_messages_consumed_total{message=\"PaymentConfirmed\"}",
+            "mechanics_saga_messages_published_total{message=\"CancelBudget\"}",
+        ];
+        using var scraper = Factory.CreateClient();
+        var metrics = "";
+        for (var attempt = 0; attempt < 50 && !expected.All(metrics.Contains); attempt++)
+        {
+            metrics = await scraper.GetStringAsync("/metrics");
+            if (!expected.All(metrics.Contains))
+                await Task.Delay(100);
+        }
+
+        metrics.Should().ContainAll(expected);
     }
 
     [Fact]

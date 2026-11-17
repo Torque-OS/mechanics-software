@@ -1,4 +1,5 @@
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Domain.ValueObjects;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
     IServiceOrderStatusHistoryStore historyStore,
+    ISagaMetrics sagaMetrics,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(1);
@@ -38,9 +40,12 @@ public sealed class ServiceOrderMetricsRefreshService(
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = await historyStore.GetAsync(
-                orders.Select(order => order.Id).ToArray(),
-                cancellationToken);
+            var statusHistory = (await historyStore.GetAsync(
+                    orders.Select(order => order.Id).ToArray(),
+                    cancellationToken))
+                .Select(ToTimelineEntry)
+                .OfType<StatusHistoryEntry>()
+                .ToList();
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -60,37 +65,21 @@ public sealed class ServiceOrderMetricsRefreshService(
                 orders.LongCount(order => order.CreatedAt >= today),
                 orders.LongCount(order => order.CompletedAt >= today));
 
-            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "AWAITING_PAYMENT", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
-            foreach (var status in statuses)
+            // Every status, including AWAITING_PAYMENT (Fase 4), so the saga dashboard sees each stage.
+            foreach (var status in StatusTimelineMetrics.AllStatuses)
             {
                 metrics.SetOrderTotalByStatus(
                     status,
                     orders.LongCount(order => order.Status.ToString() == status));
             }
 
-            var periodsByStatus = statusHistory
-                .GroupBy(history => history.ServiceOrderId)
-                .SelectMany(historyGroup =>
-                {
-                    var orderedHistory = historyGroup.OrderBy(history => history.EnteredAt).ToArray();
-                    return orderedHistory.Select((history, index) => new
-                    {
-                        history.Status,
-                        Duration = ((index + 1 < orderedHistory.Length
-                            ? orderedHistory[index + 1].EnteredAt
-                            : DateTime.UtcNow) - history.EnteredAt).TotalHours
-                    });
-                })
-                .GroupBy(history => history.Status)
-                .ToDictionary(group => group.Key, group => group.Select(history => history.Duration).ToList());
+            var timeline = StatusTimelineMetrics.Calculate(statusHistory, DateTime.UtcNow);
 
-            foreach (var status in statuses)
-            {
-                periodsByStatus.TryGetValue(status, out var periods);
-                metrics.SetAverageExecutionDurationByStatus(
-                    status,
-                    periods is null || periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
-            }
+            foreach (var (status, statusHours) in timeline.AverageHoursByStatus)
+                metrics.SetAverageExecutionDurationByStatus(status, statusHours);
+
+            foreach (var (stage, count) in timeline.CompensationsByStage)
+                sagaMetrics.SetCompensationsByStage(stage, count);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -100,4 +89,10 @@ public sealed class ServiceOrderMetricsRefreshService(
             logger.LogError(exception, "Failed to refresh service order metrics");
         }
     }
+
+    // The history store keeps the status as its API text (IN_DIAGNOSIS); the timeline works on the enum.
+    private static StatusHistoryEntry? ToTimelineEntry(ServiceOrderStatusHistoryRecord record) =>
+        Enum.TryParse<ServiceOrderStatus.Status>(record.Status.Replace("_", ""), ignoreCase: true, out var status)
+            ? new StatusHistoryEntry(record.ServiceOrderId, status, record.EnteredAt)
+            : null;
 }

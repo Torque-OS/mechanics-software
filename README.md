@@ -469,6 +469,7 @@ docs/
 | Component Diagram — Fase 3 Cloud | [`docs/architecture/component-diagram-fase3.md`](./docs/architecture/component-diagram-fase3.md) |
 | Sequence — CPF Authentication | [`docs/architecture/sequence-cpf-auth.md`](./docs/architecture/sequence-cpf-auth.md) |
 | Sequence — Service Order Opening | [`docs/architecture/sequence-service-order-opening.md`](./docs/architecture/sequence-service-order-opening.md) |
+| Saga Dashboard (Datadog) — F4-37 | [`docs/observability/saga-dashboard.md`](./docs/observability/saga-dashboard.md) |
 | Postman Collection | [`MechanicsSoftware.postman_collection.json`](./MechanicsSoftware.postman_collection.json) |
 
 ---

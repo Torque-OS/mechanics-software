@@ -56,6 +56,7 @@ builder.Services.AddSwaggerDocumentation();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<IServiceOrderMetrics, PrometheusServiceOrderMetrics>();
+builder.Services.AddSingleton<ISagaMetrics, PrometheusSagaMetrics>();
 builder.Services.AddHostedService<ServiceOrderMetricsRefreshService>();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
