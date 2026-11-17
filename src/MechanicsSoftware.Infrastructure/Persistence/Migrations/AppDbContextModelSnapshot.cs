@@ -17,7 +17,7 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.16")
+                .HasAnnotation("ProductVersion", "9.0.18")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -372,34 +372,6 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.ToTable("service_orders", (string)null);
                 });
 
-            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("EnteredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("entered_at");
-
-                    b.Property<Guid>("ServiceOrderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("service_order_id");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ServiceOrderId", "EnteredAt");
-
-                    b.ToTable("service_order_status_history", (string)null);
-                });
-
             modelBuilder.Entity("MechanicsSoftware.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -642,15 +614,6 @@ namespace MechanicsSoftware.Infrastructure.Persistence.Migrations
                     b.Navigation("PartItems");
 
                     b.Navigation("ServiceItems");
-                });
-
-            modelBuilder.Entity("MechanicsSoftware.Domain.Entities.ServiceOrderStatusHistory", b =>
-                {
-                    b.HasOne("MechanicsSoftware.Domain.Entities.ServiceOrder", null)
-                        .WithMany()
-                        .HasForeignKey("ServiceOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MechanicsSoftware.Domain.Entities.Vehicle", b =>
