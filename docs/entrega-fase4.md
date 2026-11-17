@@ -2,83 +2,211 @@
 ## FIAP POS Tech · 15SOAT · Turma 2026
 
 **Grupo: TorqueOS**
-| Nome | RM |
-|---|---|
-| Allan | RM373714 |
-| Daniel | RM370852 |
-| Diogo | RM371224 |
-| Lucas | RM371615 |
-| Joelma Renata | RM371593 |
+
+| Nome | RM | Discord |
+|---|---|---|
+| Allan | RM373714 | @zer07629 |
+| Daniel | RM370852 | @danielthx23 |
+| Diogo | RM371224 | @smilipow |
+| Lucas | RM371615 | @lucaspamponet |
+| Joelma Renata | RM371593 | @rnataoliveira |
 
 ---
 
-## 1. Repositórios (Microsserviços e Infraestrutura)
+## 1. Repositórios
 
 | Repositório | Propósito | Link |
 |---|---|---|
-| **mechanics-software** | **OS Service** + Orquestrador da Saga (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-software |
-| **mechanics-billing-service** | **Billing Service** — Orçamentos + Pagamentos Mercado Pago + Compensação/Estorno (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-billing-service |
-| **mechanics-execution-service** | **Execution Service** — Fila de Execução, Diagnóstico e Reparo (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-execution-service |
-| **mechanics-lambda** | **Auth Serverless** — Autenticação CPF + Custom JWT Authorizer (Node.js 20) | https://github.com/Torque-OS/mechanics-lambda |
-| **mechanics-infra-k8s** | **IaC Cluster & Mensageria** — Terraform VPC + EKS + API Gateway + RabbitMQ + Datadog | https://github.com/Torque-OS/mechanics-infra-k8s |
-| **mechanics-infra-db** | **IaC Bancos de Dados** — Terraform AWS RDS PostgreSQL 16 + MongoDB Atlas M0 por serviço | https://github.com/Torque-OS/mechanics-infra-db |
+| **mechanics-software** | **OS Service** e orquestrador da saga — clientes, veículos, catálogo/estoque e ciclo de vida da OS (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-software |
+| **mechanics-billing-service** | **Billing Service** — orçamentos, pagamento com Mercado Pago, cancelamento e estorno (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-billing-service |
+| **mechanics-execution-service** | **Execution Service** — fila de execução, diagnóstico e reparo (ASP.NET Core 8, PostgreSQL 16 + MongoDB) | https://github.com/Torque-OS/mechanics-execution-service |
+| **mechanics-lambda** | Autenticação serverless — login por CPF e Lambda Authorizer do API Gateway (Node.js 20) | https://github.com/Torque-OS/mechanics-lambda |
+| **mechanics-infra-k8s** | Terraform — VPC, EKS, API Gateway, RabbitMQ e Datadog Agent | https://github.com/Torque-OS/mechanics-infra-k8s |
+| **mechanics-infra-db** | Terraform — RDS PostgreSQL 16 e um MongoDB Atlas (M0) por serviço | https://github.com/Torque-OS/mechanics-infra-db |
+
+O usuário `soat-architecture` é colaborador dos 6 repositórios.
 
 ---
 
-## 2. Vídeo de Demonstração (Até 15 min)
+## 2. Vídeo de demonstração (até 15 min)
 
-> **Roteiro detalhado:** [`docs/project/video-script-fase4.md`](./project/video-script-fase4.md)
-> **Link do Vídeo:** *(Ainda falta inserir link do Video, gravação programada para 26/11/2026)*
+> **Link do vídeo:** *(pendente — gravação em 26/11/2026)*
+> **Roteiro:** [`docs/project/video-script-fase4.md`](./project/video-script-fase4.md)
 
-O vídeo demonstra:
-- Divisão em 3 microsserviços independentes com bancos SQL (PostgreSQL) e NoSQL (MongoDB) isolados por serviço
-- Fluxo completo de uma Ordem de Serviço passando pelos 3 microsserviços via RabbitMQ + MassTransit Outbox/Inbox
-- Integração com Mercado Pago (geração de QR dinâmico e confirmação via webhook assinado)
-- Execução do Saga Pattern Orquestrado no caminho feliz e em cenário de falha com rollback/compensação (`CancelBudget` + estorno no Mercado Pago + liberação de estoque)
-- Pipelines CI/CD independentes com testes unitários (cobertura ≥ 80%), BDD (Reqnroll/Gherkin) e SonarCloud Quality Gate
-- Monitoramento, logs estruturados com `CorrelationId` e tracing distribuído (OpenTelemetry) no Datadog
+O vídeo mostra:
+- uma OS passando pelos três serviços via RabbitMQ, do orçamento ao pagamento com QR do Mercado Pago e à execução;
+- uma falha na execução e a compensação da saga (OS cancelada, peças devolvidas ao estoque, pagamento estornado);
+- o deploy automatizado: pipeline de cada serviço com testes, cobertura mínima de 80% e deploy no EKS;
+- o monitoramento no Datadog: dashboard da saga, logs com `CorrelationId` e o trace distribuído de uma OS.
 
 ---
 
-## 3. Diagrama Geral da Arquitetura Final e Diagramas de Sequência da Saga
+## 3. Arquitetura
 
-Toda a documentação arquitetural e os diagramas de sequência (fluxo feliz e compensação/rollback) da Fase 4 estão versionados em:
-- [Arquitetura Fase 4 e Diagramas de Sequência da Saga (`docs/architecture/architecture-fase4.md`)](./architecture/architecture-fase4.md)
-- [ADR-010 — Divisão em Microsserviços (OS, Billing e Execution)](./decisions/ADR-010-microservices-split.md)
-- [ADR-011 — Saga Orquestrada e Mensageria com RabbitMQ + MassTransit](./decisions/ADR-011-saga-orquestrada-e-mensageria.md)
-- [ADR-012 — Estratégia de Banco de Dados Polyglot (PostgreSQL + MongoDB) por Serviço](./decisions/ADR-012-banco-por-servico.md)
-- [Justificativa Detalhada de Bancos de Dados (`docs/database/database-justification.md`)](./database/database-justification.md)
+```mermaid
+flowchart LR
+    Client([Cliente]) --> GW[API Gateway HTTP API v2]
+    GW -->|POST /auth| L[Lambda CPF Auth]
+    GW -->|JWT + VPC Link| OS
+
+    subgraph EKS[Cluster EKS]
+        OS[OS Service<br/>+ Saga Orchestrator]
+        BIL[Billing Service]
+        EXE[Execution Service]
+        MQ{{RabbitMQ}}
+    end
+
+    OS <--> MQ
+    BIL <--> MQ
+    EXE <--> MQ
+
+    OS --- OSPG[(PostgreSQL OS)]
+    OS --- OSMG[(MongoDB OS)]
+    BIL --- BPG[(PostgreSQL Billing)]
+    BIL --- BMG[(MongoDB Billing)]
+    EXE --- EPG[(PostgreSQL Execution)]
+    EXE --- EMG[(MongoDB Execution)]
+
+    BIL -->|pagamento / webhook| MP[Mercado Pago]
+    L --- OSPG
+    DD[Datadog] -.métricas, logs, traces.- EKS
+```
+
+O API Gateway é a única entrada pública. Ele roteia por prefixo: `/api/budgets` e `/api/payments` vão para o Billing,
+`/api/executions` para o Execution e o restante para o OS Service. Todas as rotas protegidas passam pelo Lambda
+Authorizer, e cada serviço valida o JWT de novo e aplica as regras de papel (staff ou cliente).
+
+Documentação completa:
+- [Arquitetura da Fase 4 e diagramas de sequência da saga — fluxo feliz e compensação](./architecture/architecture-fase4.md)
+- [ADR-010 — Divisão em microsserviços](./decisions/ADR-010-microservices-split.md)
+- [ADR-011 — Saga orquestrada e mensageria (RabbitMQ + MassTransit)](./decisions/ADR-011-saga-orquestrada-e-mensageria.md)
+- [ADR-012 — Banco por serviço (PostgreSQL + MongoDB)](./decisions/ADR-012-banco-por-servico.md)
+- [ADR-013 — REST síncrono entre serviços](./decisions/ADR-013-rest-sincrono-entre-servicos.md)
+- [Justificativa dos bancos de dados](./database/database-justification.md)
+- [Autenticação por CPF](./architecture/sequence-cpf-auth.md)
 
 ---
 
-## 4. Justificativa da Estratégia de Saga Escolhida (Saga Orquestrada)
+## 4. Estratégia de saga: orquestrada
 
-Conforme documentado no **ADR-011**, optamos pela **Saga Orquestrada** tendo o **OS Service** como orquestrador central, utilizando **RabbitMQ** como broker e **MassTransit v8** com **EF Core Transactional Outbox & Inbox**:
-1. **Ponto único de decisão sobre o ciclo de vida da OS:** A Ordem de Serviço (`ServiceOrder`) é a máquina de estados central do domínio (`RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXECUTION → COMPLETED → DELIVERED`, ou `CANCELLED`). Centralizar a decisão no OS Service evita acoplamento cíclico entre Billing e Execution.
-2. **Garantia de entrega e idempotência (Outbox + Inbox):** Todos os eventos e comandos (`ServiceOrderOpened`, `BudgetGenerated`, `BudgetApproved`, `PaymentConfirmed`, `EnqueueExecution`, `ExecutionCompleted`, `PaymentFailed`, `ExecutionFailed`, `CancelBudget`, `BudgetCancelled`) são gravados na tabela `outbox_message` na mesma transação ACID da mudança de estado e deduplicados no consumidor via tabela `inbox_state` (`MessageId`) e guardas de idempotência de domínio.
-3. **Compensação determinística (Rollback):**
-   - Falha na geração ou rejeição do orçamento (`BudgetFailed` / `BudgetRejected`) → OS vai para `CANCELLED` e libera peças reservadas no estoque.
-   - Falha no pagamento (`PaymentFailed`) → OS vai para `CANCELLED`, libera peças reservadas e envia comando `CancelBudget` ao Billing Service.
-   - Falha na execução (`ExecutionFailed`) → OS vai para `CANCELLED`, libera peças reservadas e envia comando `CancelBudget` ao Billing Service, que estorna o pagamento confirmado no Mercado Pago (`POST /v1/orders/{id}/refund` com chave de idempotência `refund-<paymentId>`) e publica `BudgetCancelled`.
+Conforme o **ADR-011**, usamos uma **saga orquestrada**, com o **OS Service** como orquestrador, **RabbitMQ** como
+broker e **MassTransit 8** com outbox e inbox transacionais (EF Core).
+
+**Por que orquestrada**
+1. **Um único dono do ciclo de vida da OS.** A OS é a máquina de estados do domínio
+   (`RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXECUTION → COMPLETED → DELIVERED`, ou
+   `CANCELLED`). Decidir tudo no OS Service evita que Billing e Execution dependam um do outro e deixa o fluxo legível
+   em um só lugar.
+2. **Compensação explícita.** Cada falha tem uma reação definida no orquestrador, em vez de espalhada por eventos
+   entre serviços.
+
+**Mensagens**
+
+| Mensagem | Tipo | Produtor → Consumidor |
+|---|---|---|
+| `RequestBudget` | comando | OS → Billing — inicia a saga em `POST /api/service-orders/{id}/request-budget`, com o snapshot dos itens |
+| `BudgetGenerated` / `BudgetFailed` | evento | Billing → OS |
+| `BudgetApproved` / `BudgetRejected` | evento | Billing → OS |
+| `PaymentConfirmed` / `PaymentFailed` | evento | Billing → OS |
+| `EnqueueExecution` | comando | OS → Execution |
+| `ExecutionCompleted` / `ExecutionFailed` | evento | Execution → OS |
+| `CancelBudget` | comando (compensação) | OS → Billing |
+| `BudgetCancelled` | evento | Billing → OS |
+
+**Compensação**
+- Orçamento recusado ou inválido (`BudgetRejected` / `BudgetFailed`) → a OS vai para `CANCELLED` e as peças reservadas
+  voltam ao estoque.
+- Pagamento falhou (`PaymentFailed`) → OS `CANCELLED`, peças devolvidas e `CancelBudget` para o Billing, que cancela
+  o QR em aberto.
+- Execução falhou (`ExecutionFailed`) → OS `CANCELLED`, peças devolvidas e `CancelBudget` para o Billing, que estorna o
+  pagamento no Mercado Pago (chave de idempotência `refund-<paymentId>`, então o estorno nunca é feito duas vezes) e
+  responde com `BudgetCancelled`.
+
+**Confiabilidade da mensageria (F4-24)** — igual nos três serviços:
+- **Outbox:** comandos e eventos são gravados na mesma transação da mudança de estado e enviados depois do commit.
+- **Inbox:** uma mensagem com `MessageId` já consumido é descartada; os handlers também são idempotentes.
+- **Retry e DLQ:** 5 novas tentativas com backoff exponencial (cerca de 16 s) para falhas transitórias. Regra de
+  negócio violada ou entidade inexistente vai direto para a fila `_error` (DLQ), sem novas tentativas.
+
+**Consulta síncrona (F4-25, ADR-013)** — `GET /api/service-orders/{id}/billing` consulta o Billing por HTTP com
+timeout, retry e circuit breaker. Com o Billing fora do ar, a resposta continua `200`, com `billingAvailable: false`.
 
 ---
 
-## 5. Justificativa da Divisão dos Microsserviços e Bancos de Dados (SQL + NoSQL)
+## 5. Divisão dos microsserviços e bancos de dados
 
-Conforme **ADR-010** e **ADR-012**, cada microsserviço possui **1 banco relacional (PostgreSQL 16)** e **1 banco orientado a documentos (MongoDB 8.0)** totalmente isolados (nenhum serviço acessa o banco de outro):
+Conforme o **ADR-010** e o **ADR-012**, cada serviço tem seu próprio PostgreSQL 16 e seu próprio MongoDB, e nenhum
+serviço acessa o banco de outro: a comunicação é por mensagens e, quando necessário, por REST.
 
-| Microsserviço | Responsabilidade (Bounded Context) | Uso do PostgreSQL (ACID + Outbox/Inbox) | Uso do MongoDB (NoSQL) |
+| Serviço | Responsabilidade | PostgreSQL (transacional + outbox/inbox) | MongoDB |
 |---|---|---|---|
-| **OS Service** (`mechanics-software`) | Clientes, Veículos, Catálogo/Estoque de Peças e Serviços, Ciclo de Vida da OS e Orquestração da Saga | `service_orders`, `customers`, `vehicles`, `parts`, `services`, `outbox_message`, `inbox_state` | `status_history` — Timeline append-only de auditoria das transições de status da OS |
-| **Billing Service** (`mechanics-billing-service`) | Geração/Decisão de Orçamentos, Cobrança QR Dinâmico no Mercado Pago, Webhook e Estornos | `budgets`, `budget_items`, `payments`, `outbox_message`, `inbox_state` | `mercadopago_notifications` (payloads brutos de webhooks) e `payment_events` (snapshots de auditoria do provedor) |
-| **Execution Service** (`mechanics-execution-service`) | Fila de Execução, Status de Diagnóstico/Reparo e Notas Técnicas | `execution_orders`, `outbox_message`, `inbox_state` | `execution_queue` (projeção de leitura ordenada por prioridade/chegada) e `execution_notes` (notas técnicas de diagnóstico e reparo) |
+| **OS Service** | Clientes, veículos, catálogo e estoque, ciclo de vida da OS e orquestração da saga | `service_orders`, `customers`, `vehicles`, `parts`, `services`, `stock_movements`, `service_order_status_history`, `outbox_message`, `inbox_state` | Histórico de status da OS (`service_order_status_history`) — migração em revisão no [#342](https://github.com/Torque-OS/mechanics-software/pull/342); até o merge, o histórico fica no PostgreSQL |
+| **Billing Service** | Orçamentos, pagamento com QR dinâmico do Mercado Pago, webhook, cancelamento e estorno | `budgets`, `budget_items`, `payments`, `outbox_message`, `inbox_state` | `mercadopago_notifications` (webhooks brutos) e `payment_events` (histórico do pagamento) |
+| **Execution Service** | Fila de execução, diagnóstico, reparo e notas técnicas | `execution_orders`, `outbox_message`, `inbox_state` | `execution_queue` (fila ordenada para leitura) e `execution_notes` (notas de diagnóstico e reparo) |
+
+**Por que PostgreSQL + MongoDB:** os dados com regras e transações (OS, orçamento, pagamento, fila) ficam no
+PostgreSQL, que também guarda o outbox e o inbox na mesma transação. O MongoDB recebe o que é append-only ou de
+leitura: históricos, payloads brutos do Mercado Pago e a projeção da fila.
 
 ---
 
-## 6. Qualidade de Código, Cobertura de Testes (≥ 80%), BDD e CI/CD
+## 6. Qualidade, testes e CI/CD
 
-| Microsserviço | Cobertura de Testes Unitários | Testes BDD (Gherkin / Reqnroll) | CI/CD & SonarCloud | Collection Postman |
+Cobertura medida em 17/11/2026 na `main` de cada repositório. Todos os pipelines falham abaixo de 80% de linhas.
+
+| Serviço | Testes | Linhas | Branches | Pipeline |
 |---|---|---|---|---|
-| **OS Service** (`mechanics-software`) | **99,16% Line / 94,69% Branch** (Gate `>= 80%`) | `tests/MechanicsSoftware.BddTests` (`ServiceOrderSaga.feature` — 3 cenários) | `coverage.yml` + `deploy.yml` | `MechanicsSoftware.postman_collection.json` |
-| **Billing Service** (`mechanics-billing-service`) | **> 90% Line** (127 testes, Gate `>= 80%`) | Coberto pela Saga BDD | `ci.yml` + `deploy.yml` | `MechanicsBillingService.postman_collection.json` |
-| **Execution Service** (`mechanics-execution-service`) | **92,3%+ Line** (Gate `>= 80%`) | Coberto pela Saga BDD | `ci.yml` + `deploy.yml` | `MechanicsExecutionService.postman_collection.json` |
+| **OS Service** | 514 unitários + 47 integração (Testcontainers) + 3 BDD | 96,6% | 92,4% | `coverage.yml` + `deploy.yml` |
+| **Billing Service** | 269 unitários | 99,1% | 91,5% | `ci.yml` + `deploy.yml` |
+| **Execution Service** | 99 unitários | 95,1% | 63,1% | `ci.yml` + `deploy.yml` |
+
+- **BDD:** `tests/MechanicsSoftware.BddTests/Features/ServiceOrderSaga.feature` (Reqnroll/Gherkin), com 3 cenários da
+  saga — fluxo feliz, falha no pagamento e falha na execução. Os cenários exercitam os handlers do orquestrador (OS
+  Service), não os outros serviços.
+- **SonarCloud** em todos os pipelines. Relatórios do OS Service:
+  [cobertura](https://rnataoliveira.github.io/mechanics-software/) ·
+  [SonarCloud](https://sonarcloud.io/summary/new_code?id=rnataoliveira_mechanics-software).
+- **Deploy:** cada serviço tem seu pipeline; depois dos testes, a imagem vai para o GHCR e os manifestos são aplicados
+  no EKS.
+- **Postman:** [`MechanicsSoftware.postman_collection.json`](../MechanicsSoftware.postman_collection.json) no OS
+  Service. As coleções do Billing e do Execution estão em revisão
+  ([billing#10](https://github.com/Torque-OS/mechanics-billing-service/pull/10),
+  [execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9)).
+
+---
+
+## 7. Monitoramento e rastreamento
+
+**Ferramenta:** Datadog
+
+| Item | Detalhes |
+|---|---|
+| Dashboard da saga (F4-37) | Volume de OS, tempo por etapa, compensações, mensagens consumidas/publicadas, falhas de consumo e DLQs — [documentação](./observability/saga-dashboard.md). Link público: *(pendente)* |
+| Tracing distribuído (F4-36) | OpenTelemetry nas requisições HTTP e nas mensagens do MassTransit, exportado para o Datadog Agent. Ativo no OS Service e no Billing; no Execution, em revisão ([execution#8](https://github.com/Torque-OS/mechanics-execution-service/pull/8)) |
+| Logs | JSON com `CorrelationId` em todas as requisições; nas mensagens, o `CorrelationId` é o id da OS |
+| Métricas | `/metrics` (Prometheus) de cada serviço e métricas por fila do RabbitMQ, coletadas pelo Datadog Agent |
+
+---
+
+## 8. Infraestrutura
+
+| Componente | Tecnologia | Repositório |
+|---|---|---|
+| Entrada única | AWS API Gateway HTTP API v2 + VPC Link + NLB interno | mechanics-infra-k8s |
+| Autenticação | AWS Lambda (Node.js 20) — CPF → JWT e Lambda Authorizer | mechanics-lambda |
+| Cluster | AWS EKS, um namespace por serviço, HPA | mechanics-infra-k8s |
+| Mensageria | RabbitMQ no EKS, um usuário por serviço no vhost `/torque-os` | mechanics-infra-k8s |
+| Bancos | RDS PostgreSQL 16 e MongoDB Atlas M0 por serviço | mechanics-infra-db |
+| Observabilidade | Datadog Agent (Helm) | mechanics-infra-k8s |
+| IaC | Terraform | mechanics-infra-k8s / mechanics-infra-db |
+| CI/CD | GitHub Actions; `main` protegida com PR obrigatório | todos |
+
+---
+
+## Pendências antes da submissão
+
+- [ ] Link do vídeo (seção 2).
+- [ ] Link público do dashboard do Datadog (seção 7).
+- [ ] Merge do [#342](https://github.com/Torque-OS/mechanics-software/pull/342) (histórico no MongoDB) e atualizar a seção 5.
+- [ ] Merge de [billing#10](https://github.com/Torque-OS/mechanics-billing-service/pull/10), [execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9) e [execution#8](https://github.com/Torque-OS/mechanics-execution-service/pull/8) e atualizar as seções 6 e 7.
+- [ ] Gerar o PDF a partir deste documento e enviar no portal.
