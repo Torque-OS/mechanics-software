@@ -111,7 +111,7 @@ broker e **MassTransit 8** com outbox e inbox transacionais (EF Core).
 | `EnqueueExecution` | comando | OS → Execution |
 | `ExecutionCompleted` / `ExecutionFailed` | evento | Execution → OS |
 | `CancelBudget` | comando (compensação) | OS → Billing |
-| `BudgetCancelled` | evento | Billing → OS |
+| `BudgetCancelled` | evento | Billing (informativo — sem consumidor no OS) |
 
 **Compensação**
 - Orçamento recusado ou inválido (`BudgetRejected` / `BudgetFailed`) → a OS vai para `CANCELLED` e as peças reservadas
@@ -120,7 +120,7 @@ broker e **MassTransit 8** com outbox e inbox transacionais (EF Core).
   o QR em aberto.
 - Execução falhou (`ExecutionFailed`) → OS `CANCELLED`, peças devolvidas e `CancelBudget` para o Billing, que estorna o
   pagamento no Mercado Pago (chave de idempotência `refund-<paymentId>`, então o estorno nunca é feito duas vezes) e
-  responde com `BudgetCancelled`.
+  publica `BudgetCancelled` (evento informativo, sem consumidor no OS).
 
 **Confiabilidade da mensageria (F4-24)** — igual nos três serviços:
 - **Outbox:** comandos e eventos são gravados na mesma transação da mudança de estado e enviados depois do commit.
@@ -140,7 +140,7 @@ serviço acessa o banco de outro: a comunicação é por mensagens e, quando nec
 
 | Serviço | Responsabilidade | PostgreSQL (transacional + outbox/inbox) | MongoDB |
 |---|---|---|---|
-| **OS Service** | Clientes, veículos, catálogo e estoque, ciclo de vida da OS e orquestração da saga | `service_orders`, `customers`, `vehicles`, `parts`, `services`, `stock_movements`, `service_order_status_history`, `outbox_message`, `inbox_state` | Histórico de status da OS (`service_order_status_history`) — migração em revisão no [#342](https://github.com/Torque-OS/mechanics-software/pull/342); até o merge, o histórico fica no PostgreSQL |
+| **OS Service** | Clientes, veículos, catálogo e estoque, ciclo de vida da OS e orquestração da saga | `service_orders`, `customers`, `vehicles`, `parts`, `services`, `stock_movements`, `outbox_message`, `inbox_state` | `service_order_status_history` (histórico de status da OS; a tabela antiga do PostgreSQL é migrada como `_legacy` no startup) |
 | **Billing Service** | Orçamentos, pagamento com QR dinâmico do Mercado Pago, webhook, cancelamento e estorno | `budgets`, `budget_items`, `payments`, `outbox_message`, `inbox_state` | `mercadopago_notifications` (webhooks brutos) e `payment_events` (histórico do pagamento) |
 | **Execution Service** | Fila de execução, diagnóstico, reparo e notas técnicas | `execution_orders`, `outbox_message`, `inbox_state` | `execution_queue` (fila ordenada para leitura) e `execution_notes` (notas de diagnóstico e reparo) |
 
@@ -163,15 +163,16 @@ Cobertura medida em 17/11/2026 na `main` de cada repositório. Todos os pipeline
 - **BDD:** `tests/MechanicsSoftware.BddTests/Features/ServiceOrderSaga.feature` (Reqnroll/Gherkin), com 3 cenários da
   saga — fluxo feliz, falha no pagamento e falha na execução. Os cenários exercitam os handlers do orquestrador (OS
   Service), não os outros serviços.
-- **SonarCloud** em todos os pipelines. Relatórios do OS Service:
-  [cobertura](https://rnataoliveira.github.io/mechanics-software/) ·
+- **SonarCloud** em todos os pipelines. Evidências do OS Service:
+  [tabela no README](../README.md#coverage-threshold) ·
+  [comentário de cobertura do CI](https://github.com/Torque-OS/mechanics-software/pull/354#issuecomment-6957788204) ·
   [SonarCloud](https://sonarcloud.io/summary/new_code?id=rnataoliveira_mechanics-software).
 - **Deploy:** cada serviço tem seu pipeline; depois dos testes, a imagem vai para o GHCR e os manifestos são aplicados
   no EKS.
 - **Postman:** [`MechanicsSoftware.postman_collection.json`](../MechanicsSoftware.postman_collection.json) no OS
-  Service. As coleções do Billing e do Execution estão em revisão
-  ([billing#10](https://github.com/Torque-OS/mechanics-billing-service/pull/10),
-  [execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9)).
+  Service e [`MechanicsBillingService.postman_collection.json`](https://github.com/Torque-OS/mechanics-billing-service/blob/main/MechanicsBillingService.postman_collection.json)
+  no Billing Service. A coleção do Execution está em revisão
+  ([execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9)).
 
 ---
 
@@ -182,7 +183,7 @@ Cobertura medida em 17/11/2026 na `main` de cada repositório. Todos os pipeline
 | Item | Detalhes |
 |---|---|
 | Dashboard da saga (F4-37) | Volume de OS, tempo por etapa, compensações, mensagens consumidas/publicadas, falhas de consumo e DLQs — [documentação](./observability/saga-dashboard.md). Link público: *(pendente)* |
-| Tracing distribuído (F4-36) | OpenTelemetry nas requisições HTTP e nas mensagens do MassTransit, exportado para o Datadog Agent. Ativo no OS Service e no Billing; no Execution, em revisão ([execution#8](https://github.com/Torque-OS/mechanics-execution-service/pull/8)) |
+| Tracing distribuído (F4-36) | OpenTelemetry nas requisições HTTP e nas mensagens do MassTransit, exportado para o Datadog Agent — ativo nos três serviços (OS, Billing e Execution) |
 | Logs | JSON com `CorrelationId` em todas as requisições; nas mensagens, o `CorrelationId` é o id da OS |
 | Métricas | `/metrics` (Prometheus) de cada serviço e métricas por fila do RabbitMQ, coletadas pelo Datadog Agent |
 
@@ -207,6 +208,5 @@ Cobertura medida em 17/11/2026 na `main` de cada repositório. Todos os pipeline
 
 - [ ] Link do vídeo (seção 2).
 - [ ] Link público do dashboard do Datadog (seção 7).
-- [ ] Merge do [#342](https://github.com/Torque-OS/mechanics-software/pull/342) (histórico no MongoDB) e atualizar a seção 5.
-- [ ] Merge de [billing#10](https://github.com/Torque-OS/mechanics-billing-service/pull/10), [execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9) e [execution#8](https://github.com/Torque-OS/mechanics-execution-service/pull/8) e atualizar as seções 6 e 7.
+- [ ] Merge de [execution#9](https://github.com/Torque-OS/mechanics-execution-service/pull/9) e atualizar a seção 6.
 - [ ] Gerar o PDF a partir deste documento e enviar no portal.

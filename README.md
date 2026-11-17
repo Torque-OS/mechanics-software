@@ -327,7 +327,20 @@ dotnet test tests/MechanicsSoftware.IntegrationTests
 
 ### Coverage threshold
 
-CI enforces **80% line coverage**. HTML report: [rnataoliveira.github.io/mechanics-software](https://rnataoliveira.github.io/mechanics-software/)
+CI (`coverage.yml`) enforces **80% line coverage** across unit and integration tests and posts the summary table on every pull request.
+
+**Coverage (F4-26)** — 514 unit tests + 47 integration tests (Testcontainers) + 3 BDD scenarios, measured on 2026-11-17 on `main`:
+
+| Project | Lines | Branches |
+|---|---|---|
+| `MechanicsSoftware.API` | 87% | 88% |
+| `MechanicsSoftware.Application` | 100% | 91% |
+| `MechanicsSoftware.Contracts` | 100% | 100% |
+| `MechanicsSoftware.Domain` | 99% | 95% |
+| `MechanicsSoftware.Infrastructure` | 99% | 94% |
+| **Total** | **96.6%** (3215 / 3311) | **92.4%** (691 / 741) |
+
+Evidence: [CI coverage comment](https://github.com/Torque-OS/mechanics-software/pull/354#issuecomment-6957788204) · [SonarCloud](https://sonarcloud.io/summary/new_code?id=rnataoliveira_mechanics-software)
 
 ---
 
