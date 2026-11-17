@@ -11,6 +11,5 @@ public interface IAppDbContext
     DbSet<Part> Parts { get; }
     DbSet<Service> Services { get; }
     DbSet<ServiceOrder> ServiceOrders { get; }
-    DbSet<ServiceOrderStatusHistory> ServiceOrderStatusHistory { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -8,6 +8,7 @@ namespace MechanicsSoftware.API.Metrics;
 public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
+    IServiceOrderStatusHistoryStore historyStore,
     ISagaMetrics sagaMetrics,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
@@ -32,15 +33,19 @@ public sealed class ServiceOrderMetricsRefreshService(
             var orders = await db.ServiceOrders
                 .Select(order => new
                 {
+                    order.Id,
                     order.CreatedAt,
                     order.CompletedAt,
                     order.Status,
                 })
                 .ToListAsync(cancellationToken);
 
-            var statusHistory = await db.ServiceOrderStatusHistory
-                .Select(history => new StatusHistoryEntry(history.ServiceOrderId, history.Status, history.EnteredAt))
-                .ToListAsync(cancellationToken);
+            var statusHistory = (await historyStore.GetAsync(
+                    orders.Select(order => order.Id).ToArray(),
+                    cancellationToken))
+                .Select(ToTimelineEntry)
+                .OfType<StatusHistoryEntry>()
+                .ToList();
 
             var completedOrders = orders
                 .Where(order => order.CompletedAt != null)
@@ -84,4 +89,10 @@ public sealed class ServiceOrderMetricsRefreshService(
             logger.LogError(exception, "Failed to refresh service order metrics");
         }
     }
+
+    // The history store keeps the status as its API text (IN_DIAGNOSIS); the timeline works on the enum.
+    private static StatusHistoryEntry? ToTimelineEntry(ServiceOrderStatusHistoryRecord record) =>
+        Enum.TryParse<ServiceOrderStatus.Status>(record.Status.Replace("_", ""), ignoreCase: true, out var status)
+            ? new StatusHistoryEntry(record.ServiceOrderId, status, record.EnteredAt)
+            : null;
 }

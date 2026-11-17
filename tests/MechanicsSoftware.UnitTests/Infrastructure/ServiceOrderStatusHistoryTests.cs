@@ -17,10 +17,10 @@ public class ServiceOrderStatusHistoryTests
         db.ServiceOrders.Add(order);
         await db.SaveChangesAsync();
 
-        var history = await db.ServiceOrderStatusHistory
-            .SingleAsync(item => item.ServiceOrderId == order.Id);
+        var history = (await InMemoryDbContextHelper.GetHistoryStore(db).GetAsync(order.Id))
+            .Single();
 
-        history.Status.Should().Be(ServiceOrderStatus.Status.Received);
+        history.Status.Should().Be("RECEIVED");
         history.EnteredAt.Should().Be(order.CreatedAt);
     }
 
@@ -35,15 +35,10 @@ public class ServiceOrderStatusHistoryTests
         order.StartDiagnosis();
         await db.SaveChangesAsync();
 
-        var history = await db.ServiceOrderStatusHistory
-            .Where(item => item.ServiceOrderId == order.Id)
-            .OrderBy(item => item.EnteredAt)
-            .ToListAsync();
+        var history = await InMemoryDbContextHelper.GetHistoryStore(db).GetAsync(order.Id);
 
         history.Should().HaveCount(2);
-        history.Select(item => item.Status).Should().ContainInOrder(
-            ServiceOrderStatus.Status.Received,
-            ServiceOrderStatus.Status.InDiagnosis);
+        history.Select(item => item.Status).Should().ContainInOrder("RECEIVED", "IN_DIAGNOSIS");
         history[1].EnteredAt.Should().BeOnOrAfter(history[0].EnteredAt);
     }
 
@@ -57,8 +52,7 @@ public class ServiceOrderStatusHistoryTests
 
         await db.SaveChangesAsync();
 
-        var historyCount = await db.ServiceOrderStatusHistory
-            .CountAsync(item => item.ServiceOrderId == order.Id);
+        var historyCount = (await InMemoryDbContextHelper.GetHistoryStore(db).GetAsync(order.Id)).Count;
 
         historyCount.Should().Be(1);
     }
