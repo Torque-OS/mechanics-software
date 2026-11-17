@@ -2,6 +2,7 @@ using FluentAssertions;
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
@@ -47,9 +48,10 @@ public sealed class LegacySqlStatusHistoryMigratorTests : IAsyncLifetime, IDispo
     }
 
     [Fact]
-    public async Task MigrateAsync_ConvertsLegacyEnumNamesBeforeWritingToMongo()
+    public async Task MigrateAsync_ConvertsLegacyEnumNamesAndSkipsUnknownStatuses()
     {
         var serviceOrderId = Guid.NewGuid();
+        var unknownStatusOrderId = Guid.NewGuid();
         var recordId = Guid.NewGuid();
         var now = DateTime.UtcNow;
         var enteredAt = new DateTime(
@@ -74,11 +76,13 @@ public sealed class LegacySqlStatusHistoryMigratorTests : IAsyncLifetime, IDispo
             insertCommand.CommandText = """
                 INSERT INTO service_order_status_history_legacy
                     (id, service_order_id, status, entered_at)
-                VALUES ($1, $2, 'InDiagnosis', $3);
+                VALUES ($1, $2, 'InDiagnosis', $3), ($4, $5, 'NotAStatus', $3);
                 """;
             insertCommand.Parameters.AddWithValue(recordId);
             insertCommand.Parameters.AddWithValue(serviceOrderId);
             insertCommand.Parameters.AddWithValue(enteredAt);
+            insertCommand.Parameters.AddWithValue(Guid.NewGuid());
+            insertCommand.Parameters.AddWithValue(unknownStatusOrderId);
             await insertCommand.ExecuteNonQueryAsync();
         }
 
@@ -86,7 +90,8 @@ public sealed class LegacySqlStatusHistoryMigratorTests : IAsyncLifetime, IDispo
             .UseNpgsql(_postgresContainer.GetConnectionString())
             .Options;
         await using var db = new AppDbContext(options);
-        var migrator = new LegacySqlStatusHistoryMigrator(db, _historyStore);
+        var migrator = new LegacySqlStatusHistoryMigrator(
+            db, _historyStore, NullLogger<LegacySqlStatusHistoryMigrator>.Instance);
 
         await migrator.MigrateAsync();
 
@@ -98,5 +103,6 @@ public sealed class LegacySqlStatusHistoryMigratorTests : IAsyncLifetime, IDispo
                     serviceOrderId,
                     "IN_DIAGNOSIS",
                     enteredAt));
+        (await _historyStore.GetAsync(unknownStatusOrderId)).Should().BeEmpty();
     }
 }

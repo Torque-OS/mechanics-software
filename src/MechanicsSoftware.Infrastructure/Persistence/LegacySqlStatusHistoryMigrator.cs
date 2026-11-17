@@ -1,12 +1,14 @@
 using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace MechanicsSoftware.Infrastructure.Persistence;
 
 public sealed class LegacySqlStatusHistoryMigrator(
     AppDbContext db,
-    IServiceOrderStatusHistoryStore historyStore)
+    IServiceOrderStatusHistoryStore historyStore,
+    ILogger<LegacySqlStatusHistoryMigrator> logger)
 {
     private const string LegacyTableName = "service_order_status_history_legacy";
 
@@ -60,11 +62,21 @@ public sealed class LegacySqlStatusHistoryMigrator(
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            // The legacy table stores the enum name (InDiagnosis); Mongo stores the API text (IN_DIAGNOSIS).
+            // An unknown value is skipped instead of failing the service startup.
+            var legacyStatus = reader.GetString(2);
+            if (!Enum.TryParse<ServiceOrderStatus.Status>(legacyStatus, ignoreCase: true, out var status))
+            {
+                logger.LogWarning(
+                    "Skipping legacy status history {RecordId} of service order {ServiceOrderId}: unknown status {Status}",
+                    reader.GetGuid(0), reader.GetGuid(1), legacyStatus);
+                continue;
+            }
+
             records.Add(new ServiceOrderStatusHistoryRecord(
                 reader.GetGuid(0),
                 reader.GetGuid(1),
-                new ServiceOrderStatus(
-                    Enum.Parse<ServiceOrderStatus.Status>(reader.GetString(2))).ToString(),
+                new ServiceOrderStatus(status).ToString(),
                 reader.GetDateTime(3)));
         }
 
