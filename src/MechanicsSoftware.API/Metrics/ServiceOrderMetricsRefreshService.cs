@@ -8,6 +8,7 @@ namespace MechanicsSoftware.API.Metrics;
 public sealed class ServiceOrderMetricsRefreshService(
     IServiceScopeFactory scopeFactory,
     IServiceOrderMetrics metrics,
+    ISagaMetrics sagaMetrics,
     ILogger<ServiceOrderMetricsRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(1);
@@ -38,13 +39,7 @@ public sealed class ServiceOrderMetricsRefreshService(
                 .ToListAsync(cancellationToken);
 
             var statusHistory = await db.ServiceOrderStatusHistory
-                .Select(history => new
-                {
-
-                    history.ServiceOrderId,
-                    history.Status,
-                    history.EnteredAt
-                })
+                .Select(history => new StatusHistoryEntry(history.ServiceOrderId, history.Status, history.EnteredAt))
                 .ToListAsync(cancellationToken);
 
             var completedOrders = orders
@@ -65,35 +60,21 @@ public sealed class ServiceOrderMetricsRefreshService(
                 orders.LongCount(order => order.CreatedAt >= today),
                 orders.LongCount(order => order.CompletedAt >= today));
 
-            var statuses = new[] { "RECEIVED", "IN_DIAGNOSIS", "AWAITING_APPROVAL", "IN_EXECUTION", "COMPLETED", "DELIVERED", "CANCELLED" };
-            foreach (var status in statuses)
+            // Every status, including AWAITING_PAYMENT (Fase 4), so the saga dashboard sees each stage.
+            foreach (var status in StatusTimelineMetrics.AllStatuses)
             {
                 metrics.SetOrderTotalByStatus(
                     status,
                     orders.LongCount(order => order.Status.ToString() == status));
             }
 
-            foreach (var status in statuses)
-            {
-                var periods = statusHistory
-                    .GroupBy(history => history.ServiceOrderId)
-                    .SelectMany(historyGroup => historyGroup
-                        .OrderBy(history => history.EnteredAt)
-                        .Select((history, index) => new
-                        {
-                            history.Status,
-                            Duration = ((index + 1 < historyGroup.Count()
-                                ? historyGroup.OrderBy(item => item.EnteredAt).ElementAt(index + 1).EnteredAt
-                                : DateTime.UtcNow) - history.EnteredAt).TotalHours
-                        }))
-                    .Where(history => new ServiceOrderStatus(history.Status).ToString() == status)
-                    .Select(history => history.Duration)
-                    .ToList();
+            var timeline = StatusTimelineMetrics.Calculate(statusHistory, DateTime.UtcNow);
 
-                metrics.SetAverageExecutionDurationByStatus(
-                    status,
-                    periods.Count == 0 ? 0 : Math.Round(periods.Average(), 2));
-            }
+            foreach (var (status, statusHours) in timeline.AverageHoursByStatus)
+                metrics.SetAverageExecutionDurationByStatus(status, statusHours);
+
+            foreach (var (stage, count) in timeline.CompensationsByStage)
+                sagaMetrics.SetCompensationsByStage(stage, count);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

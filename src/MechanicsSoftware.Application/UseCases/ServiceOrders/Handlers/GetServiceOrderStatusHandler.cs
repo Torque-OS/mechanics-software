@@ -8,10 +8,13 @@ namespace MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
 public sealed class GetServiceOrderStatusHandler(IAppDbContext db)
 {
     public async Task<ServiceOrderStatusResponse> ExecuteAsync(
-        Guid serviceOrderId, CancellationToken cancellationToken = default)
+        Guid serviceOrderId, Guid? ownerCustomerId = null, CancellationToken cancellationToken = default)
     {
         var order = await db.ServiceOrders
-            .FirstOrDefaultAsync(o => o.Id == serviceOrderId, cancellationToken)
+            .FirstOrDefaultAsync(
+                o => o.Id == serviceOrderId
+                    && (ownerCustomerId == null || o.CustomerId == ownerCustomerId),
+                cancellationToken)
             ?? throw new NotFoundException(nameof(ServiceOrder), serviceOrderId);
 
         return new ServiceOrderStatusResponse(

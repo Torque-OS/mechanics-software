@@ -50,6 +50,7 @@ public static class DependencyInjection
         // Service Orders
         services.AddScoped<CreateServiceOrderHandler>();
         services.AddScoped<StartDiagnosisHandler>();
+        services.AddScoped<RequestBudgetHandler>();
         services.AddScoped<AddServiceItemHandler>();
         services.AddScoped<AddPartItemHandler>();
         services.AddScoped<StartExecutionHandler>();
@@ -57,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<DeliverServiceOrderHandler>();
         services.AddScoped<GetServiceOrderStatusHandler>();
         services.AddScoped<GetServiceOrderHistoryHandler>();
+        services.AddScoped<GetServiceOrderBillingHandler>();
         services.AddScoped<GetServiceOrderHandler>();
         services.AddScoped<ListServiceOrdersHandler>();
         services.AddScoped<GetAverageExecutionTimeHandler>();

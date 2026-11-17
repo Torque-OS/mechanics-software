@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Application.UseCases.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers.SagaEvents;
 using MechanicsSoftware.IntegrationTests.Base;
@@ -56,6 +57,7 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
     public override async Task InitializeAsync()
     {
         await Factory.ResetDomainDataAsync();
+        Factory.Billing.Unavailable = false;
         await AuthenticateAsync(AdminEmail, AdminPassword);
     }
 
@@ -320,13 +322,216 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
         await bus.Publish(new ExecutionFailed(orderId, Guid.NewGuid(), "Part unavailable.", DateTime.UtcNow));
 
         await WaitForStatusAsync(client, orderId, "CANCELLED");
+
+        // F4-37: the saga dashboard reads these from /metrics. The consume observer and the outbox
+        // delivery of CancelBudget run just after the status change, so the scrape is polled.
+        string[] expected =
+        [
+            "mechanics_saga_messages_consumed_total{message=\"ExecutionFailed\"}",
+            "mechanics_saga_messages_consumed_total{message=\"PaymentConfirmed\"}",
+            "mechanics_saga_messages_published_total{message=\"CancelBudget\"}",
+        ];
+        using var scraper = Factory.CreateClient();
+        var metrics = "";
+        for (var attempt = 0; attempt < 50 && !expected.All(metrics.Contains); attempt++)
+        {
+            metrics = await scraper.GetStringAsync("/metrics");
+            if (!expected.All(metrics.Contains))
+                await Task.Delay(100);
+        }
+
+        metrics.Should().ContainAll(expected);
+    }
+
+    [Fact]
+    public async Task RequestBudget_OrderInDiagnosis_SendsTheItemSnapshotToBilling()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var serviceId = await CreateServiceAsync(client);
+        var partId = await CreatePartAsync(client);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+        await StartDiagnosisAsync(client, orderId);
+        await AddServiceItemAsync(client, orderId, serviceId);
+        await AddPartItemAsync(client, orderId, partId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
+        var harness = Factory.Services.GetTestHarness();
+        (await harness.Published.Any<RequestBudget>(m => m.Context.Message.ServiceOrderId == orderId)).Should().BeTrue();
+        var sent = harness.Published.Select<RequestBudget>(m => m.Context.Message.ServiceOrderId == orderId).Single().Context;
+        sent.CorrelationId.Should().Be(orderId);
+        sent.Message.CustomerId.Should().Be(customerId);
+        sent.Message.Items.Should().ContainSingle(i => i.Type == "Service" && i.ReferenceId == serviceId &&
+                                                       i.UnitPriceInCents == ServicePriceInCents && i.Quantity == ServiceItemQuantity);
+        sent.Message.Items.Should().ContainSingle(i => i.Type == "Part" && i.ReferenceId == partId &&
+                                                       i.UnitPriceInCents == PartPriceInCents && i.Quantity == PartItemQuantity);
+        await AssertOrderStatusAsync(client, orderId, "IN_DIAGNOSIS");
+    }
+
+    [Fact]
+    public async Task RequestBudget_WithoutServiceItem_Returns422()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+        await StartDiagnosisAsync(client, orderId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task RequestBudget_OrderNotInDiagnosis_Returns409()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        var response = await client.PostAsync($"/api/service-orders/{orderId}/request-budget", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Billing_BudgetAndPayment_AreReturnedFromTheBillingService()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        var budget = new BillingBudget(Guid.NewGuid(), "APPROVED", ServicePriceInCents, DateTime.UtcNow, DateTime.UtcNow,
+            [new BillingBudgetItem("Service", Guid.NewGuid(), "Troca de óleo", ServicePriceInCents, 1, ServicePriceInCents)]);
+        var payment = new BillingPayment(Guid.NewGuid(), "PENDING", ServicePriceInCents, "qr-data", null, DateTime.UtcNow, null, null);
+        Factory.Billing.SetBudget(orderId, budget);
+        Factory.Billing.SetPayment(budget.Id, payment);
+
+        var response = await client.GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var billing = await ReadAsync<ServiceOrderBillingResponse>(response);
+        billing.BillingAvailable.Should().BeTrue();
+        billing.Budget!.Id.Should().Be(budget.Id);
+        billing.Budget.Items.Should().ContainSingle();
+        billing.Payment!.Id.Should().Be(payment.Id);
+        billing.Payment.QrData.Should().Be("qr-data");
+    }
+
+    [Fact]
+    public async Task Billing_BillingServiceDown_StillAnswersWithBillingUnavailable()
+    {
+        var client = await AuthenticatedClientAsync();
+        var orderId = await OrderInDiagnosisWithServiceAsync(client);
+        Factory.Billing.Unavailable = true;
+
+        var response = await client.GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var billing = await ReadAsync<ServiceOrderBillingResponse>(response);
+        billing.BillingAvailable.Should().BeFalse();
+        billing.UnavailableReason.Should().NotBeNullOrWhiteSpace();
+        billing.Budget.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Billing_AsCustomer_Returns403()
+    {
+        var client = await AuthenticatedClientAsync();
+        var customerId = await CreateCustomerAsync(client);
+        var vehicleId = await CreateVehicleAsync(client, customerId);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        var response = await CustomerClient(customerId).GetAsync($"/api/service-orders/{orderId}/billing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // ========================================================================
+    // F4-13 — customer tokens (CPF Lambda) only reach the customer's own orders
+    // ========================================================================
+
+    [Theory]
+    [InlineData("status")]
+    [InlineData("history")]
+    public async Task CustomerToken_OwnOrder_ReturnsOk(string resource)
+    {
+        var client = await AuthenticatedClientAsync();
+        var (customerId, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId);
+        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}/{resource}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("status")]
+    [InlineData("history")]
+    public async Task CustomerToken_AnotherCustomersOrder_ReturnsNotFound(string resource)
+    {
+        var client = await AuthenticatedClientAsync();
+        var (ownerId, _) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+        var (_, otherOrderId) = await CustomerWithOrderAsync(client, "52998224725", "other@example.com", "XYZ9E87");
+
+        using var customerClient = CustomerClient(ownerId);
+        var response = await customerClient.GetAsync($"/api/service-orders/{otherOrderId}/{resource}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "a customer must not read, or learn about, another customer's order");
+    }
+
+    [Fact]
+    public async Task CustomerToken_WithoutSubject_ReturnsNotFound()
+    {
+        var client = await AuthenticatedClientAsync();
+        var (_, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId: null);
+        var response = await customerClient.GetAsync($"/api/service-orders/{orderId}/status");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "a customer token that names no customer must not be treated as staff");
+    }
+
+    [Fact]
+    public async Task StaffToken_AnyCustomersOrder_ReturnsOk()
+    {
+        var client = await AuthenticatedClientAsync();
+        var (_, orderId) = await CustomerWithOrderAsync(client, "52998224725", "other@example.com", "XYZ9E87");
+
+        var status = await client.GetAsync($"/api/service-orders/{orderId}/status");
+        var history = await client.GetAsync($"/api/service-orders/{orderId}/history");
+
+        status.StatusCode.Should().Be(HttpStatusCode.OK);
+        history.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("/api/service-orders/{0}")]
+    [InlineData("/api/service-orders/{0}/billing")]
+    [InlineData("/api/service-orders")]
+    [InlineData("/api/service-orders/metrics/average-execution-time")]
+    [InlineData("/api/service-orders/metrics/daily-volume")]
+    public async Task CustomerToken_StaffOnlyEndpoint_ReturnsForbidden(string pathTemplate)
+    {
+        var client = await AuthenticatedClientAsync();
+        var (customerId, orderId) = await CustomerWithOrderAsync(client, "11144477735", "owner@example.com", "ABC1D23");
+
+        using var customerClient = CustomerClient(customerId);
+        var response = await customerClient.GetAsync(string.Format(pathTemplate, orderId));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     // ========================================================================
     // Helper Methods
     // ========================================================================
 
-    private HttpClient CustomerClient(Guid customerId)
+    // Mirrors the token the CPF Lambda (mechanics-lambda/src/jwt.js) issues: sub = customer id, cpf, role CUSTOMER.
+    private HttpClient CustomerClient(Guid? customerId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(WebApplicationFactoryFixture.JwtSecret));
 
@@ -335,7 +540,7 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             audience: JwtSettings.DefaultAudience,
             claims:
             [
-                new Claim(JwtRegisteredClaimNames.Sub, customerId.ToString()),
+                .. customerId is null ? [] : new[] { new Claim(JwtRegisteredClaimNames.Sub, customerId.Value.ToString()) },
                 new Claim("cpf", "11144477735"),
                 new Claim(JwtSettings.RoleClaimType, Policies.CustomerRole),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
@@ -532,6 +737,16 @@ public sealed class ServiceOrderFlowTests : IntegrationTestBase
             $"/api/service-orders/{orderId}/deliver", new { });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<(Guid CustomerId, Guid OrderId)> CustomerWithOrderAsync(
+        HttpClient client, string document, string email, string plate)
+    {
+        var customerId = await CreateCustomerAsync(client, document, email);
+        var vehicleId = await CreateVehicleAsync(client, customerId, plate);
+        var orderId = await CreateServiceOrderAsync(client, customerId, vehicleId);
+
+        return (customerId, orderId);
     }
 
     private static async Task<Guid> OrderInDiagnosisWithServiceAsync(HttpClient client)

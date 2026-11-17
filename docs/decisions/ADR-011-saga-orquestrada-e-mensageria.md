@@ -48,7 +48,12 @@ Compensações são comandos idempotentes: `CancelBudget`, `RefundPayment`, `Can
 - RabbitMQ no cluster EKS (e em `docker-compose` localmente).
 - MassTransit fornece: state machine de saga, *retry* com backoff, *outbox* transacional, filas de erro (DLQ) e propagação de `CorrelationId`/trace context.
 - Consumidores idempotentes (chave: `MessageId`); publicação via *outbox* para não perder eventos entre banco e broker.
-- REST síncrono apenas onde necessário (consultas), com timeout e resiliência; **nunca acesso direto ao banco de outro serviço**.
+- REST síncrono apenas onde necessário (consultas), com timeout e resiliência; **nunca acesso direto ao banco de outro serviço**. Regras e primeiro caso na [ADR-013](ADR-013-rest-sincrono-entre-servicos.md).
+
+> **Atualização (F4-24):** os três serviços usam a mesma política de *retry* em todos os consumidores: 5 novas tentativas com backoff exponencial (cerca de 16 s no total) para falhas transitórias; violações de regra de negócio (`DomainException` e derivadas) e entidades inexistentes (`NotFoundException`) não são repetidas e vão direto para a fila `_error` (DLQ). Combinado com o *inbox* (deduplicação por `MessageId`) e o *outbox*, nenhuma mensagem é perdida nem processada duas vezes.
+> Não há *redelivery* agendado: ele exige o plugin `rabbitmq_delayed_message_exchange`, que a imagem oficial do RabbitMQ não traz. Mensagens na DLQ são reprocessadas movendo-as de volta à fila original.
+>
+> **Atualização (RequestBudget):** o passo 2 é iniciado pelo `POST /api/service-orders/{id}/request-budget` (staff) no OS Service, que envia `RequestBudget` com o snapshot dos itens. O pagamento é iniciado pelo cliente direto no Billing (`POST /api/payments`), por isso não existe um comando `RequestPayment`.
 
 **Descartados:** SQS/SNS (gerenciado, mas sem saga nativa e mais difícil de rodar/demonstrar localmente) e Kafka (pesado para 3 serviços).
 

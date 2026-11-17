@@ -138,6 +138,7 @@ All variables with a default work out of the box for local development. Producti
 | `RABBITMQ_VHOST` | No | RabbitMQ virtual host | `/` |
 | `RABBITMQ_USERNAME` | Yes | RabbitMQ user | `mechanics` (matches `docker-compose.yml`) |
 | `RABBITMQ_PASSWORD` | Yes | RabbitMQ password | `mechanics` (matches `docker-compose.yml`) |
+| `BILLING_API_URL` | Yes | Base URL of the Billing Service API (ADR-013) | `http://localhost:8081` in `appsettings.Development.json` |
 
 > *`GATEWAY_KEY` must match the `gateway_key` Terraform variable in `mechanics-infra-k8s`.
 
@@ -162,6 +163,12 @@ Content-Type: application/json
 ```
 
 Use `Authorization: Bearer <token>` on all protected endpoints.
+
+### Customer login (CPF)
+
+Customers authenticate through the API Gateway with `POST /auth { "cpf": "..." }`, served by `mechanics-lambda`. The token has `role=CUSTOMER` and `sub` set to the customer id. It only reaches `GET /api/service-orders/{id}/status` and `/history`, and only for the customer's own orders. Any other order returns 404. See [Autenticação — Fase 4](docs/architecture/architecture-fase4.md#autenticação-cpfjwt--api-gateway--f4-13).
+
+To check the whole flow against a deployed gateway, run `scripts/smoke-auth-gateway.sh` (usage is in the script header).
 
 ### Default admin credentials
 
@@ -198,7 +205,7 @@ Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
 | Vehicles | `GET/POST /api/vehicles` · `GET/PUT/DELETE /api/vehicles/{id}` |
 | Parts | `GET/POST /api/parts` · `GET/PUT/DELETE /api/parts/{id}` · `PATCH /api/parts/{id}/stock` |
 | Services | `GET/POST /api/services` · `GET/PUT/DELETE /api/services/{id}` |
-| Service Orders | `GET/POST /api/service-orders` · `GET /api/service-orders/{id}/status` · `GET /api/service-orders/{id}/history` · lifecycle endpoints below |
+| Service Orders | `GET/POST /api/service-orders` · `GET /api/service-orders/{id}/status` · `GET /api/service-orders/{id}/history` · `GET /api/service-orders/{id}/billing` · lifecycle endpoints below |
 
 ### Service Order Lifecycle
 
@@ -213,6 +220,7 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → AWAITING_PAYMENT → IN_EXEC
 | Start diagnosis | `POST /api/service-orders/{id}/start-diagnosis` |
 | Add service item | `POST /api/service-orders/{id}/services` |
 | Add part item | `POST /api/service-orders/{id}/parts` |
+| Request budget | `POST /api/service-orders/{id}/request-budget` — `202`; sends `RequestBudget` with the item snapshot to the Billing Service · `422` without a service item · `409` outside `IN_DIAGNOSIS` |
 | Budget generated / approved | `BudgetGenerated` / `BudgetApproved` Saga event from the Billing Service (ADR-011) |
 | Payment confirmed | `PaymentConfirmed` Saga event from the Billing Service; sends `EnqueueExecution` to the Execution Service |
 | Start execution | `POST /api/service-orders/{id}/start-execution` |
@@ -224,10 +232,20 @@ Saga events are consumed from RabbitMQ by `Infrastructure/Messaging/Consumers` (
 per event prefixed with the service name (`os-service-budget-generated`, …). Each consumer calls the
 matching handler in `Handlers/SagaEvents/`. Repeated deliveries are harmless: the inbox skips a
 `MessageId` already consumed, and the handlers ignore an event whose effect is already applied.
-Commands to the other services (`EnqueueExecution`, `CancelBudget`) are published through the same outbox
-transaction as the status change, with `CorrelationId` = service order id, and are not sent again when a
+Commands to the other services (`RequestBudget`, `EnqueueExecution`, `CancelBudget`) are published through the
+same outbox transaction as the status change, with `CorrelationId` = service order id, and are not sent again when a
 repeated event finds the effect already applied.
 Every status change is recorded and returned by `GET /api/service-orders/{id}/history`.
+
+**Retry and DLQ (F4-24).** Every consumer retries transient failures 5 times with exponential backoff (about 16 s);
+business rule violations and unknown orders are not retried. A message that still fails goes to the queue's `_error`
+queue (e.g. `os-service-payment-confirmed_error`); move it back with the RabbitMQ shovel/"Move messages" once the cause
+is fixed. The Billing and Execution services use the same policy.
+
+**Billing of a service order (F4-25).** `GET /api/service-orders/{id}/billing` (staff) returns the budget and the
+payment by calling the Billing Service over HTTP ([ADR-013](docs/decisions/ADR-013-rest-sincrono-entre-servicos.md)),
+with the caller's token, timeouts, retry and a circuit breaker. When the Billing Service is down the answer is still
+`200`, with `billingAvailable: false` and the reason, instead of an error.
 
 Full schemas available at `/swagger`.
 
@@ -447,6 +465,7 @@ docs/
 | Component Diagram — Fase 3 Cloud | [`docs/architecture/component-diagram-fase3.md`](./docs/architecture/component-diagram-fase3.md) |
 | Sequence — CPF Authentication | [`docs/architecture/sequence-cpf-auth.md`](./docs/architecture/sequence-cpf-auth.md) |
 | Sequence — Service Order Opening | [`docs/architecture/sequence-service-order-opening.md`](./docs/architecture/sequence-service-order-opening.md) |
+| Saga Dashboard (Datadog) — F4-37 | [`docs/observability/saga-dashboard.md`](./docs/observability/saga-dashboard.md) |
 | Postman Collection | [`MechanicsSoftware.postman_collection.json`](./MechanicsSoftware.postman_collection.json) |
 
 ---

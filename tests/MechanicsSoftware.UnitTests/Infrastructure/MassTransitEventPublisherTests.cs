@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MassTransit;
+using MechanicsSoftware.Application.Abstractions;
 using MechanicsSoftware.Infrastructure.Messaging;
 using Moq;
 using TorqueOS.Contracts.ServiceOrders;
@@ -12,7 +13,7 @@ public class MassTransitEventPublisherTests
     public async Task PublishAsync_ForwardsEventAndCancellationTokenToMassTransit()
     {
         var endpoint = new Mock<IPublishEndpoint>();
-        var publisher = new MassTransitEventPublisher(endpoint.Object);
+        var publisher = new MassTransitEventPublisher(endpoint.Object, Mock.Of<ISagaMetrics>());
         var integrationEvent = new ServiceOrderOpened(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
         using var cts = new CancellationTokenSource();
 
@@ -34,7 +35,7 @@ public class MassTransitEventPublisherTests
         var orderId = Guid.NewGuid();
         var integrationEvent = new ServiceOrderOpened(orderId, Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
 
-        await new MassTransitEventPublisher(endpoint.Object).PublishAsync(integrationEvent, orderId);
+        await new MassTransitEventPublisher(endpoint.Object, Mock.Of<ISagaMetrics>()).PublishAsync(integrationEvent, orderId);
 
         var context = new Mock<PublishContext<ServiceOrderOpened>>();
         context.SetupProperty(c => c.CorrelationId);

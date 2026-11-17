@@ -21,6 +21,21 @@
       "type": "string"
     },
     {
+      "key": "gatewayUrl",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cpf",
+      "value": "11144477735",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "token",
       "value": "",
       "type": "string"
@@ -85,6 +100,39 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "auth", "login"]
             }
+          }
+        },
+        {
+          "name": "Customer Login (CPF, via API Gateway)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Served by mechanics-lambda behind the API Gateway; the local API has no /auth route.",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('customerToken', pm.response.json().token);",
+                  "    console.log('Customer token stored.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpf\": \"{{cpf}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/auth",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["auth"]
+            },
+            "description": "Exchanges a customer's CPF for a JWT (role CUSTOMER, sub = customer id). Set `gatewayUrl` to `terraform output api_gateway_url` from mechanics-infra-k8s. Returns 400 for an invalid CPF, 404 for an unknown customer and 403 for an inactive one."
           }
         }
       ]
@@ -497,15 +545,31 @@
           }
         },
         {
-          "name": "Get Status (public)",
+          "name": "Get Status",
           "request": {
-            "auth": { "type": "noauth" },
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/status",
               "host": ["{{baseUrl}}"],
               "path": ["api", "service-orders", "{{serviceOrderId}}", "status"]
-            }
+            },
+            "description": "Requires a staff or customer token. A customer only sees their own orders; any other id returns 404."
+          }
+        },
+        {
+          "name": "Get Status (as customer)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{customerToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{gatewayUrl}}/api/service-orders/{{serviceOrderId}}/status",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "status"]
+            },
+            "description": "Uses the token from **Auth / Customer Login (CPF, via API Gateway)**. Returns 200 for the customer's own order and 404 for any other customer's order."
           }
         },
         {
@@ -516,6 +580,17 @@
               "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/history",
               "host": ["{{baseUrl}}"],
               "path": ["api", "service-orders", "{{serviceOrderId}}", "history"]
+            }
+          }
+        },
+        {
+          "name": "Get Billing (budget + payment from Billing Service)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/billing",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "billing"]
             }
           }
         },
@@ -559,6 +634,17 @@
               "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/parts",
               "host": ["{{baseUrl}}"],
               "path": ["api", "service-orders", "{{serviceOrderId}}", "parts"]
+            }
+          }
+        },
+        {
+          "name": "Request Budget (sends RequestBudget to Billing Service)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/service-orders/{{serviceOrderId}}/request-budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "service-orders", "{{serviceOrderId}}", "request-budget"]
             }
           }
         },

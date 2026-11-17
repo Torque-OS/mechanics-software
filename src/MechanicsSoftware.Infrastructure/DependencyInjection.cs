@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MechanicsSoftware.Application.Abstractions;
+using MechanicsSoftware.Infrastructure.Billing;
 using MechanicsSoftware.Infrastructure.Messaging;
 using MechanicsSoftware.Infrastructure.Notifications;
 using MechanicsSoftware.Infrastructure.Persistence;
@@ -45,6 +46,8 @@ public static class DependencyInjection
         services.AddPlatformAuthorization();
 
         services.AddMessaging(configuration);
+
+        services.AddBillingClient(configuration);
 
         return services;
     }
