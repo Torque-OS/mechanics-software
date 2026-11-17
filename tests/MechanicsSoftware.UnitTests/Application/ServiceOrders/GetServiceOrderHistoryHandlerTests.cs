@@ -46,4 +46,31 @@ public class GetServiceOrderHistoryHandlerTests
 
         await act.Should().ThrowAsync<NotFoundException>();
     }
+
+    [Fact]
+    public async Task ExecuteAsync_OwnerCustomer_ReturnsOrder()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var customerId = Guid.NewGuid();
+        var order = ServiceOrder.Create(Guid.NewGuid(), customerId, Guid.NewGuid());
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var result = await new GetServiceOrderHistoryHandler(db).ExecuteAsync(order.Id, customerId);
+
+        result.Id.Should().Be(order.Id);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AnotherCustomersOrder_ThrowsNotFoundException()
+    {
+        await using var db = InMemoryDbContextHelper.Create();
+        var order = ServiceOrder.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        db.ServiceOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var act = async () => await new GetServiceOrderHistoryHandler(db).ExecuteAsync(order.Id, Guid.NewGuid());
+
+        await act.Should().ThrowAsync<NotFoundException>();
+    }
 }

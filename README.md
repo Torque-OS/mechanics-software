@@ -168,6 +168,12 @@ Content-Type: application/json
 
 Use `Authorization: Bearer <token>` on all protected endpoints.
 
+### Customer login (CPF)
+
+Customers authenticate through the API Gateway with `POST /auth { "cpf": "..." }`, served by `mechanics-lambda`. The token has `role=CUSTOMER` and `sub` set to the customer id. It only reaches `GET /api/service-orders/{id}/status` and `/history`, and only for the customer's own orders. Any other order returns 404. See [Autenticação — Fase 4](docs/architecture/architecture-fase4.md#autenticação-cpfjwt--api-gateway--f4-13).
+
+To check the whole flow against a deployed gateway, run `scripts/smoke-auth-gateway.sh` (usage is in the script header).
+
 ### Default admin credentials
 
 | Field | Value |

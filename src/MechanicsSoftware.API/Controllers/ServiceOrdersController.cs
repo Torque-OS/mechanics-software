@@ -1,3 +1,4 @@
+using MechanicsSoftware.API.Extensions;
 using MechanicsSoftware.API.Transport.ServiceOrders;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Commands;
 using MechanicsSoftware.Application.UseCases.ServiceOrders.Handlers;
@@ -44,17 +45,22 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
         return Ok(result);
     }
 
+    /// <summary>Current status of the order. Customers only see their own orders; any other id returns 404.</summary>
     [HttpGet("{id:guid}/status")]
     public async Task<IActionResult> GetStatus(Guid id, CancellationToken cancellationToken)
     {
-        var result = await getStatusHandler.ExecuteAsync(id, cancellationToken);
+        var result = await getStatusHandler.ExecuteAsync(id, User.OrderOwnerScope(), cancellationToken);
         return Ok(result);
     }
 
+    /// <summary>
+    /// Status timeline of the order, oldest first — includes the changes driven by saga events.
+    /// Customers only see their own orders; any other id returns 404.
+    /// </summary>
     [HttpGet("{id:guid}/history")]
     public async Task<IActionResult> GetHistory(Guid id, CancellationToken cancellationToken)
     {
-        var result = await historyHandler.ExecuteAsync(id, cancellationToken);
+        var result = await historyHandler.ExecuteAsync(id, User.OrderOwnerScope(), cancellationToken);
         return Ok(result);
     }
 
@@ -139,6 +145,7 @@ public class ServiceOrdersController( // NOSONAR S6960 S107: Clean Architecture 
     }
 
     [HttpGet("metrics/daily-volume")]
+    [Authorize(Policy = Policies.Staff)]
     public async Task<IActionResult> DailyVolume(
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,

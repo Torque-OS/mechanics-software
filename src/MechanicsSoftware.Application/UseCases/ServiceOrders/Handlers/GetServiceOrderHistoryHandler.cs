@@ -15,10 +15,13 @@ public sealed class GetServiceOrderHistoryHandler(
     IServiceOrderStatusHistoryStore historyStore)
 {
     public async Task<ServiceOrderHistoryResponse> ExecuteAsync(
-        Guid serviceOrderId, CancellationToken cancellationToken = default)
+        Guid serviceOrderId, Guid? ownerCustomerId = null, CancellationToken cancellationToken = default)
     {
         var order = await db.ServiceOrders
-            .FirstOrDefaultAsync(o => o.Id == serviceOrderId, cancellationToken)
+            .FirstOrDefaultAsync(
+                o => o.Id == serviceOrderId
+                    && (ownerCustomerId == null || o.CustomerId == ownerCustomerId),
+                cancellationToken)
             ?? throw new NotFoundException(nameof(ServiceOrder), serviceOrderId);
 
         var history = await historyStore.GetAsync(serviceOrderId, cancellationToken);
