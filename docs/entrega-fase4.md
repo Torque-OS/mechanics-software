@@ -30,7 +30,7 @@ O usuário `soat-architecture` é colaborador dos 6 repositórios.
 
 ## 2. Vídeo de demonstração (até 15 min)
 
-> **Link do vídeo:** *(pendente — gravação em 26/11/2026)*
+> **Link do vídeo:** https://www.youtube.com/watch?v=tazrqJkGXn4
 > **Roteiro:** [`docs/project/video-script-fase4.md`](./project/video-script-fase4.md)
 
 O vídeo mostra:
@@ -182,7 +182,7 @@ Cobertura medida em 17/11/2026 na `main` de cada repositório. Todos os pipeline
 
 | Item | Detalhes |
 |---|---|
-| Dashboard da saga (F4-37) | Volume de OS, tempo por etapa, compensações, mensagens consumidas/publicadas, falhas de consumo e DLQs — [documentação](./observability/saga-dashboard.md). Link público: *(pendente)* |
+| Dashboard da saga (F4-37) | Volume de OS, tempo por etapa, compensações, mensagens consumidas/publicadas, falhas de consumo e DLQs — [documentação](./observability/saga-dashboard.md). Link público: https://p.datadoghq.com/sb/c52a1cb9-e1f7-11f1-a897-6687053cd176-a56d2d346b6a0da427ea8ca1d2d5c381 |
 | Tracing distribuído (F4-36) | OpenTelemetry nas requisições HTTP e nas mensagens do MassTransit, exportado para o Datadog Agent — ativo nos três serviços (OS, Billing e Execution) |
 | Logs | JSON com `CorrelationId` em todas as requisições; nas mensagens, o `CorrelationId` é o id da OS |
 | Métricas | `/metrics` (Prometheus) de cada serviço e métricas por fila do RabbitMQ, coletadas pelo Datadog Agent |
